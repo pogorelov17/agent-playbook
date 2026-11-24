@@ -409,6 +409,24 @@ class ValidatorTest(unittest.TestCase):
         self.executor_role("## Rules\n", "## Rules\n\n```\n~~~\n    code\n~~~\n```\n")
         self.assertEqual(self.fx.errors(), [])
 
+    def test_closing_fence_may_be_followed_by_text(self):
+        # C3 (repair round 5): same character, at least as long; nothing more.
+        for form in ("~~~\nordinary text\n~~~end", "```\ntext\n````  info", "~~~\ntext\n~~~"):
+            with self.subTest(form):
+                self.executor_role("## Rules\n", f"## Rules\n\n{form}\n")
+                self.assertEqual(self.fx.errors(), [])
+
+    def test_closer_with_text_ends_the_fence(self):
+        # After '~~~end' closes the block, the next line is text again.
+        text = self.executor_role("## Rules\n", "## Rules\n\n~~~\ncode\n~~~end\n\n    Indented.\n")
+        self.assertLineError(text, "    Indented.", "a line indented by four or more spaces")
+
+    def test_shorter_or_other_closer_with_text_does_not_close(self):
+        for form, line in (("````\ncode\n```end", "````"), ("~~~\ncode\n```end", "~~~")):
+            with self.subTest(form):
+                text = self.executor_role("ROLE: executor\n", f"ROLE: executor\n\n{form}\n")
+                self.assertLineError(text, line, FENCE_OPEN)
+
     def test_fence_is_closed_after_matching_line(self):
         text = self.executor_role("## Rules\n", "## Rules\n\n````\ncode\n`````\n\n    Indented.\n")
         self.assertLineError(text, "    Indented.", "a line indented by four or more spaces")
@@ -546,11 +564,19 @@ class ValidatorTest(unittest.TestCase):
     def test_setext_underline_rejected(self):
         message = "a setext heading underline is not allowed in a ROLE.md"
         for form, line in (("Detail\n=====", "====="), ("Detail\n-----", "-----"),
-                           ("Detail\n---", "---"), ("Detail\n--", "--"), ("Detail\n  ---  ", "  ---  "),
+                           ("Detail\n---", "---"), ("Detail\n=", "="), ("Detail\n====", "===="),
                            ("\n===", "==="), ("```\nNor\n===\n```", "===")):
             with self.subTest(form):
                 text = self.executor_role("## Rules\n", f"## Rules\n\n{form}\n")
                 self.assertLineError(text, line, message)
+
+    def test_setext_rule_matches_the_raw_line_exactly(self):
+        # C1 (repair round 5): only '=' characters, or three or more '-' after
+        # a non-blank line, and nothing else on the line.
+        for form in ("Text\n--", "Text\n-", "Text\n = ", "Text\n- -", "Text\n  ---  ", "Text\n=== "):
+            with self.subTest(form):
+                self.executor_role("## Rules\n", f"## Rules\n\n{form}\n")
+                self.assertEqual(self.fx.errors(), [])
 
     def test_two_line_setext_title(self):
         text = self.executor_role("## Report\n", "Draft\nReport\n------\n")
@@ -751,11 +777,18 @@ class ValidatorTest(unittest.TestCase):
     def test_hash_lines_rejected(self):
         for line in ("- ## Hidden extra heading", "* # Hidden", "+   ### Hidden", "1. ## Hidden",
                      "12) ## Hidden", "## Extra", "   ## Rules", "#Hashtag", "####### Seven",
-                     "- - ## Nested", "#"):
+                     "- ## example", "1. ## example", "  ## example", "#"):
             with self.subTest(line):
                 text = self.executor_role("## Rules\n", f"## Rules\n\n{line}\n")
                 errors = self.assertLineError(text, line, HASH_LINE)
                 self.assertError("headings must be exactly", errors)
+
+    def test_hash_after_two_list_markers_is_ordinary_text(self):
+        # C2 (repair round 5): at most one list marker before the '#'.
+        for line in ("- - ## example", "1. - # example", "* + ### example"):
+            with self.subTest(line):
+                self.executor_role("## Rules\n", f"## Rules\n\n{line}\n")
+                self.assertEqual(self.fx.errors(), [])
 
     def test_required_heading_must_be_exact_and_at_column_zero(self):
         for line in (" ## Rules", "## Rules ", "## Rules #", "##  Rules", "- ## Rules"):
