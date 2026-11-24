@@ -6,7 +6,7 @@ If the brief is incomplete, the worker either stops and asks (a wasted round) or
 
 1. **One role.** Name it. Never mix roles ("review and then fix"); dispatch two workers instead.
 2. **The outcome wanted**, in one or two sentences, and how it will be judged.
-3. **Inputs**: the spec and plan as read-only files, when they exist for this phase (say where they are); any earlier reports the worker needs; anything else it must read. When the plan splits the work into several pull requests, every executor and reviewer brief for a slice names the slice and lists the acceptance criteria that apply to this pull request (`lead/skills/writing-plan.md`); a brief that lists none means all criteria of the spec apply.
+3. **Inputs**: the spec and plan as read-only files, when they exist for this phase (say where they are); any earlier reports the worker needs; anything else it must read. When the plan splits the work into several pull requests, every executor, reviewer and arbiter brief for a slice names the slice and lists the acceptance criteria that apply to this pull request (`lead/skills/writing-plan.md`); a brief that lists none means all criteria of the spec apply.
 4. **Repository**, when the assignment uses one: the URL, the base branch and the exact base commit SHA.
 5. **Permissions**: what the worker may do (read, run tests, create a branch, push to the task branch, open a draft pull request, browse the web) and what it may not.
 6. **Scope limits**: what is out of scope, which files or areas must not be touched, the time or effort expected.

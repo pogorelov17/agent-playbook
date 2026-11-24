@@ -20,6 +20,8 @@ For each step, in order (unless the plan's dependencies allow reordering):
 5. Commit the step.
 6. Tick the step in your own copy of the checklist (the plan file itself is read-only; once the pull request exists, that copy is in its description), and record the step's evidence (command, commit, observed output) in your running log; it goes into your report's Evidence section.
 
+Items 1, 2 and 5 apply to steps that change files; for a step that changes no file, such as opening the pull request or final verification, do what the step says, compare the result with what the plan expects, and record it (items 3 and 6), and never create an empty commit. If final verification leads to a fix, the fix is a new commit and final verification is repeated on the new head.
+
 ## Allowed deviations
 
 A deviation is allowed when it does not change the result the spec and plan describe. Examples:

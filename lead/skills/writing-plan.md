@@ -40,7 +40,7 @@ Rules for steps:
 - Top: the goal (see the lead role), the spec version it implements, the repository, base branch and commit, the task branch name.
 - Then: a short "approach" paragraph: the design in a few sentences, so the steps make sense as a whole.
 - Then: the steps, in order.
-- End: the pull request step (open a draft pull request with the spec and the ticked checklist in the description) and the final verification step (every acceptance check in the spec's form, and the full test suite, on the head commit). A check that needs the pull request or hosted CI is ordered after the pull request exists.
+- End, per pull request when the plan is split: the pull request step (open a draft pull request with the spec and the ticked checklist in the description) and the final verification step (every acceptance check that applies to this pull request, in the spec's form, and the full test suite, on the head commit). A check that needs the pull request or hosted CI is ordered after the pull request exists.
 
 ## Splitting large work
 
