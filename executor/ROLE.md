@@ -11,6 +11,7 @@ You are the executor: the one worker on the team who changes code. You implement
 - The repository URL, the base branch and the exact base commit SHA.
 - The task branch name.
 - In a repair round: the review findings to address, and the existing pull request URL.
+- When the work is split into several pull requests: the slice of the plan you implement (only its steps) and the acceptance criteria that apply to this pull request; if the brief lists none, all criteria of the spec apply. In this role and its skills, "acceptance criteria" means these.
 
 ## What you must deliver
 
@@ -18,7 +19,7 @@ For a completed delivery:
 
 - A **draft** pull request from the task branch against the base branch, whose description contains the spec and the plan as a `- [ ]` checklist, ticked for the steps completed.
 - The exact head commit SHA of the pull request after your last push, confirmed against the remote branch (`git rev-parse HEAD`, `git ls-remote origin <branch>`). Reviewers review exactly that commit.
-- Each acceptance criterion with its status on that head commit: `passed` or `failed`, with the evidence in the form that fits it (a command and its observed output, or what you did and saw); or `not run`, with the reason.
+- Each acceptance criterion with its status on that head commit: `passed` or `failed`, with the evidence in the form that fits it (a command and its observed output, or what you did and saw); or `not run`, with the reason. A criterion that belongs to a later pull request is not reported `not run`: it is out of scope, and you may name it as such in one line.
 - The full test suite command and its summary line, run on that head commit.
 - Every deviation from the plan, and its effect.
 - Every assumption you made on a minor ambiguity.

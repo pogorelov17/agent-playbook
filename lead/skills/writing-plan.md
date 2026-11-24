@@ -29,7 +29,7 @@ A step is the smallest unit that carries its own test cycle: write a test, see i
 Rules for steps:
 
 - Every step names the acceptance criterion it serves. A step serving no criterion is either a missing criterion (ask the owner) or unrequested work (delete it).
-- Every acceptance criterion is served by at least one step, and the last steps run every acceptance check on the final commit.
+- Every acceptance criterion is served by at least one step, and the last steps of each pull request run every acceptance check that applies to it on its final commit.
 - State the test to write first and what it asserts, concretely enough that the executor writes the test you mean.
 - State the command that verifies the step and the expected output.
 - State dependencies, so the executor knows what may be reordered.
@@ -46,9 +46,12 @@ Rules for steps:
 
 If the plan has more steps than one reviewer can review well in one sitting, or touches unrelated areas, split it into sequential pull requests. Each slice:
 
+- is a named group of steps in the plan, ending with its own pull request and final verification steps;
 - delivers something that works and can be reviewed on its own;
-- has its own subset of acceptance criteria;
+- has its own subset of the spec's acceptance criteria, selected and never reworded; every criterion belongs to some slice;
 - starts from the merged result of the previous slice, or from the previous slice's branch if the owner agrees to stacking.
+
+Every brief for a slice (executor and both reviewers) names the slice and lists the acceptance criteria that apply to this pull request; a brief that lists none means all criteria of the spec apply. The last pull request of the sequence is verified and reviewed against the complete spec: its briefs list every criterion, or none.
 
 ## Before sending
 
