@@ -14,7 +14,7 @@ A **lead** talks to the human owner, clarifies the task, writes a spec and a pla
 | `researcher` | Answers questions that need outside sources, with links, dates and confidence. | 1 |
 | `arbiter` | Settles disputed review claims by reproduction; cannot waive an approval. | 1 |
 
-The delivery flow: the executor opens a draft pull request; two reviewers review the same commit independently; if either requests changes, a fresh executor fixes on the same branch and both reviews repeat; the arbiter steps in on conflicts or after two failed repair rounds; only the owner merges.
+The delivery flow: the executor opens a draft pull request; two reviewers review the same commit independently. When the verdicts conflict, or a finding is disputed (or after two failed repair rounds), the arbiter rules before any repair. An upheld finding leads to a repair by a fresh executor on the same branch and two fresh reviews of the new commit; if every finding behind a `REQUEST_CHANGES` is overturned, a replacement reviewer reviews the unchanged commit; a ruling that stays unresolved goes to the owner. Only the owner merges.
 
 ## Layout
 
@@ -32,19 +32,18 @@ tests/                    unit tests for the validator
 
 Every `ROLE.md` has exactly these headings, in this order: `# <Role name>`, `## Who you are`, `## What you receive`, `## What you must deliver`, `## Rules`, `## You must not`, `## Report`, and no other heading of any level. Inside a section, structure with bold lead-in labels or numbered paragraphs. Skills and shared files may use sub-headings.
 
-A `ROLE.md` is written in a strict, plain form, so that the check can compare lines instead of interpreting Markdown. These are errors, each reported with file and line:
+**The `ROLE.md` contract is about raw lines.** Agents read the raw text of their instruction file; nothing renders it. So the check works on raw lines and does not render or interpret Markdown. A *line* is what you get by splitting the file on `\n` only (after turning `\r\n` and `\r` into `\n`); a *blank* line is empty or ASCII spaces only. Each of these is an error, reported with file and line:
 
-- an HTML comment opener `<!--`, anywhere;
-- a block-quoted line (optional spaces, then `>`);
-- a setext heading underline: a line of only `=` characters, or of only `-` characters directly after a non-blank line (put a blank line before a `---` thematic break);
-- a tab character, anywhere;
-- a line indented by four or more spaces outside a fenced code block.
-
-Fenced code blocks are allowed; headings, the ban and the stamp inside them do not count.
+1. **Characters.** Any character other than `\n` and printable ASCII (0x20-0x7E): tab, other control characters, non-breaking space, byte-order mark, typographic quotes, dashes and arrows, any non-ASCII letter. The message names the code point.
+2. **Hash lines.** Any line whose first non-space character is `#`, or whose first non-space characters are a list marker (`-`, `*`, `+`, or digits followed by `.` or `)`) followed by spaces and then `#`, unless it is one of the seven required heading lines, exactly, at column 0, in order, each once. This applies everywhere, inside fenced code too.
+3. **Fences.** A fence line (first non-space characters three or more backticks or tildes) that does not start at column 0 or follows a list marker; a fence that is not closed by a fence of the same character, at least as long, before the end of the file.
+4. **Angle brackets.** A line whose first non-space character is `<` (no raw HTML).
+5. **Comments, quotes, setext underlines, indentation.** `<!--` anywhere; a block-quoted line (optional spaces, then `>`); a line of only `=` characters, or of only `-` characters directly after a non-blank line (put a blank line before a `---` thematic break); a line indented by four or more spaces outside fenced code.
+6. **Required lines.** The ban, the first-line instruction and the stamp (below) are compared as whole raw lines and must be outside fenced code.
 
 Every role except `lead` states, in its `ROLE.md`: the ban on starting other agents, the duty to read and follow the project's own instruction file (`AGENTS.md` or `CLAUDE.md`), and its report stamp (`ROLE: <role>`), which must be the first line of every report.
 
-The ban is one canonical sentence (`AGENT_BAN` in `scripts/check.py`). One line outside fenced code must be exactly this sentence, optionally after a `- ` or `N. ` list marker, with nothing else on the line; further text goes on the next line:
+The ban is one canonical sentence (`AGENT_BAN` in `scripts/check.py`). One line outside fenced code must be exactly this sentence, optionally after a `- ` or `N. ` list marker (`N`: one to nine ASCII digits), with nothing else on the line; further text goes on the next line:
 
 ```text
 You never start, spawn, schedule or delegate to other agents, sub-agents, threads, workflows or new machines, even when a tool or a built-in skill offers it.
@@ -100,17 +99,17 @@ python3 -m unittest discover -s tests       # tests for the validator
 - `team.json` matches the format (schema 1; each role has stamp `ROLE: <name>`, a positive `instances`, and a bundle that starts with its `ROLE.md`, then its own files, then `shared/` files);
 - every file it names exists, including the model sets;
 - every top-level folder that contains a `ROLE.md` (including dot-folders; only `.git` and `.github` are skipped) is a role in `team.json`;
-- every bundle path is in canonical form (no `./`, `..`, `//` or leading `/`), and no bundle lists a file twice;
+- every bundle path is in canonical form (no `./`, `..`, `//` or leading `/`), no bundle lists a file twice, no component of a bundle path is a symbolic link, and every bundled file resolves inside the repository;
 - no Markdown file (`.md` or `.markdown`, in any letter case) under a role folder or `shared/` is left out of every bundle (no orphans);
-- every `ROLE.md` is in the strict form above and has exactly the required headings (ATX lines outside fenced code), in order, and no others;
+- every `ROLE.md` keeps the raw-line contract above, including exactly the required heading lines, in order, and no other line starting with `#`;
 - no role or skill text contains the launcher-specific words the project bans (whole words, case-sensitive; see `FORBIDDEN` in `scripts/check.py`); texts say "isolated workspace", "the lead", "the owner" instead;
 - every non-lead `ROLE.md` contains the agent-ban line and, in its `## Report` section, the first-line instruction directly followed by the stamp line;
 - every model set covers every role with the right number of entries and satisfies `model_rules`, allowing only its declared exceptions; families are compared ignoring letter case and surrounding spaces;
 - every `models/*.json` file is listed in `model_sets`.
 
-Files that are not valid UTF-8, and fields of the wrong JSON type (including a model set's optional `description`, which must be a string), are reported as errors with the file and field named.
+The forbidden-word scan and the UTF-8 check read every Markdown file under the role folders and `shared/` and every file named in any bundle, raw, so `--print` never emits text the check did not read. Files that are not valid UTF-8, and fields of the wrong JSON type (including a model set's optional `description`, which must be a string), are reported as errors with the file and field named.
 
-**Limits of the check.** `check.py` compares lines; it does not interpret Markdown, and the strict form is what makes that sufficient. It tracks fenced code and nothing else: an HTML block such as `<div>` is read as plain lines, and text that only renders as a required line (escapes, entities) does not count. It checks that the ban, the instruction and the stamp are present, not what neighbouring sentences say about them; reviewers read the text. The forbidden-word scan reads every line of every Markdown file under the role folders and `shared/`, raw.
+**Limits of the check.** It checks that the ban, the instruction and the stamp are present, not what neighbouring sentences say about them; reviewers read the text. Skill and shared files have no structural checks.
 
 CI (`.github/workflows/check.yml`) runs both commands on every pull request and on pushes to `main`.
 

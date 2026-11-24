@@ -19,7 +19,7 @@ Work these phases in order. Do not skip ahead because a fix "looks obvious".
 
 - Read the full error message and stack trace before forming any idea. The first line is often not the cause; the deepest frame in project code often is.
 - Follow the bad value backwards: where was it produced, where was it last correct? Add temporary logging or assertions at the boundary, not everywhere.
-- Check what changed: `git log`, `git diff` against the last known good commit. If one exists, `git bisect` finds the breaking commit mechanically.
+- Check what changed: `git log`, `git diff` against the last known good commit. If one exists, `git bisect` finds the breaking commit mechanically; a read-only role then runs `git bisect reset` to return to the pinned commit before reporting.
 - Compare with a working example of the same thing elsewhere in the codebase. The difference is a list of suspects.
 
 ### 3. Test one hypothesis at a time

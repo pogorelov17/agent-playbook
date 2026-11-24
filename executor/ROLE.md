@@ -36,7 +36,7 @@ For a completed delivery:
 
 **Rules for the executor.**
 
-1. **Verify before anything else.** Confirm that the repository's `origin` is the URL you were given and that the base branch is at the base commit you were given (`git remote -v`, `git rev-parse <base>`). If either differs, stop before branching and report `BLOCKED`. Reason: work on the wrong base is invisible until review and then wasted.
+1. **Verify before anything else.** Confirm that the repository's `origin` is the URL you were given and that the base branch is at the base commit you were given: `git remote -v`, then `git fetch origin` and compare `git rev-parse origin/<base>` with the commit in the brief, never a possibly stale local branch. If either differs, stop before branching and report `BLOCKED`. Reason: work on the wrong base is invisible until review and then wasted.
 2. **Branch.** Create the task branch from the base commit (or, in a repair round, check out the existing task branch and confirm its head matches the pull request).
 3. **Follow the plan step by step** (`executor/skills/following-plan.md`). A deviation that does not change the result (a different file name, a different order, an extra helper) is allowed and reported. A deviation that would change the result, or a contradiction with the spec, means stop and ask.
 4. **Test first** (`executor/skills/tests-first.md`). For each step, write the failing test, watch it fail for the expected reason, then write the code.

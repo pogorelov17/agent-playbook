@@ -31,4 +31,4 @@ The reviewer, scout, researcher and arbiter are read-only: they never change a t
 
 Any experiment that requires changing a tracked file, for example breaking the code to see whether a test really fails, happens in a throwaway copy of the tree outside the checkout, deleted afterwards. Evidence from it is labelled as coming from a modified copy and says what was modified.
 
-Before reporting, confirm the checkout has no tracked changes: `git status --short --untracked-files=no` prints nothing. If a project command changed a tracked file, restore it (`git checkout -- <file>`) and name the command in your report.
+Before reporting, confirm the checkout has no tracked changes: `git status --short --untracked-files=no` prints nothing. If a project command changed a tracked file, restore both the index and the working tree for that path from the pinned commit (for example `git restore --source=HEAD --staged --worktree -- <path>` while `HEAD` is the pinned commit) and name the command in your report.

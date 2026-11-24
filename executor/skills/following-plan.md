@@ -18,7 +18,7 @@ For each step, in order (unless the plan's dependencies allow reordering):
 3. Run the step's verification command. Compare its output with the expected output in the plan.
 4. Run the wider test suite if the change could affect other areas.
 5. Commit the step.
-6. Tick the step in the plan checklist (in your working copy until the pull request exists, then in its description), and record the step's evidence (command, commit, observed output) in your running log; it goes into your report's Evidence section.
+6. Tick the step in your own copy of the checklist (the plan file itself is read-only; once the pull request exists, that copy is in its description), and record the step's evidence (command, commit, observed output) in your running log; it goes into your report's Evidence section.
 
 ## Allowed deviations
 
