@@ -14,7 +14,7 @@ A **lead** talks to the human owner, clarifies the task, writes a spec and a pla
 | `researcher` | Answers questions that need outside sources, with links, dates and confidence. | 1 |
 | `arbiter` | Settles disputed review claims by reproduction; cannot waive an approval. | 1 |
 
-The delivery flow: the executor opens a draft pull request; two reviewers on different models review the same commit independently; if either requests changes, a fresh executor fixes on the same branch and both reviews repeat; the arbiter steps in on conflicts or after two failed repair rounds; only the owner merges.
+The delivery flow: the executor opens a draft pull request; two reviewers review the same commit independently; if either requests changes, a fresh executor fixes on the same branch and both reviews repeat; the arbiter steps in on conflicts or after two failed repair rounds; only the owner merges.
 
 ## Layout
 
@@ -30,15 +30,33 @@ tests/                    unit tests for the validator
 .github/workflows/        CI: runs the validator and the tests
 ```
 
-Every `ROLE.md` has exactly these headings, in this order: `# <Role name>`, `## Who you are`, `## What you receive`, `## What you must deliver`, `## Rules`, `## You must not`, `## Report`, and no other heading of any level (ATX `#` or setext underline). Inside a section, structure with bold lead-in labels or numbered paragraphs. Skills and shared files may use sub-headings.
+Every `ROLE.md` has exactly these headings, in this order: `# <Role name>`, `## Who you are`, `## What you receive`, `## What you must deliver`, `## Rules`, `## You must not`, `## Report`, and no other heading of any level. Inside a section, structure with bold lead-in labels or numbered paragraphs. Skills and shared files may use sub-headings.
+
+A `ROLE.md` is written in a strict, plain form, so that the check can compare lines instead of interpreting Markdown. These are errors, each reported with file and line:
+
+- an HTML comment opener `<!--`, anywhere;
+- a block-quoted line (optional spaces, then `>`);
+- a setext heading underline: a line of only `=` characters, or of only `-` characters directly after a non-blank line (put a blank line before a `---` thematic break);
+- a tab character, anywhere;
+- a line indented by four or more spaces outside a fenced code block.
+
+Fenced code blocks are allowed; headings, the ban and the stamp inside them do not count.
 
 Every role except `lead` states, in its `ROLE.md`: the ban on starting other agents, the duty to read and follow the project's own instruction file (`AGENTS.md` or `CLAUDE.md`), and its report stamp (`ROLE: <role>`), which must be the first line of every report.
 
-The ban is one canonical sentence. It must appear as a complete sentence on a plain line (not inside an HTML comment, a code fence, a block quote, or a line indented by four or more spaces or a tab), at the start of the line (optionally after a list marker); further sentences may follow it on the line, but nothing may be added to it:
+The ban is one canonical sentence (`AGENT_BAN` in `scripts/check.py`). One line outside fenced code must be exactly this sentence, optionally after a `- ` or `N. ` list marker, with nothing else on the line; further text goes on the next line:
 
-> You never start, spawn, schedule or delegate to other agents, sub-agents, threads, workflows or new machines, even when a tool or a built-in skill offers it.
+```text
+You never start, spawn, schedule or delegate to other agents, sub-agents, threads, workflows or new machines, even when a tool or a built-in skill offers it.
+```
 
-The stamp is a line consisting of exactly `ROLE: <role>` inside the `## Report` section, which also states `The first line of every report is exactly:`; both must be on plain lines in the same sense.
+The first-line instruction is also one canonical sentence (`FIRST_LINE_RULE`). Inside the `## Report` section, one line must be exactly this sentence, and the next non-blank line must be exactly the stamp `ROLE: <role>`, with no leading or trailing whitespace:
+
+```text
+The first line of every report is exactly:
+
+ROLE: <role>
+```
 
 ## How a bundle is assembled
 
@@ -84,15 +102,15 @@ python3 -m unittest discover -s tests       # tests for the validator
 - every top-level folder that contains a `ROLE.md` (including dot-folders; only `.git` and `.github` are skipped) is a role in `team.json`;
 - every bundle path is in canonical form (no `./`, `..`, `//` or leading `/`), and no bundle lists a file twice;
 - no Markdown file (`.md` or `.markdown`, in any letter case) under a role folder or `shared/` is left out of every bundle (no orphans);
-- every `ROLE.md` has exactly the required headings, in order, and no others (headings inside block quotes count; headings inside code fences or HTML comments do not);
+- every `ROLE.md` is in the strict form above and has exactly the required headings (ATX lines outside fenced code), in order, and no others;
 - no role or skill text contains the launcher-specific words the project bans (whole words, case-sensitive; see `FORBIDDEN` in `scripts/check.py`); texts say "isolated workspace", "the lead", "the owner" instead;
-- every non-lead `ROLE.md` contains the canonical agent-ban sentence and, in its `## Report` section, the stamp line and the first-line instruction;
+- every non-lead `ROLE.md` contains the agent-ban line and, in its `## Report` section, the first-line instruction directly followed by the stamp line;
 - every model set covers every role with the right number of entries and satisfies `model_rules`, allowing only its declared exceptions; families are compared ignoring letter case and surrounding spaces;
 - every `models/*.json` file is listed in `model_sets`.
 
 Files that are not valid UTF-8, and fields of the wrong JSON type (including a model set's optional `description`, which must be a string), are reported as errors with the file and field named.
 
-**Limits of the check.** `check.py` is line-based, not a Markdown parser. It removes HTML comments and recognises fenced code, indented lines, block quotes, ATX and setext headings line by line. It does not understand code indented inside list items, fences inside block quotes or list items, HTML blocks other than comments, or deliberately obfuscated Markdown (for example escapes or entities that render as the required text). The forbidden-word scan reads the raw text, comments included.
+**Limits of the check.** `check.py` compares lines; it does not interpret Markdown, and the strict form is what makes that sufficient. It tracks fenced code and nothing else: an HTML block such as `<div>` is read as plain lines, and text that only renders as a required line (escapes, entities) does not count. It checks that the ban, the instruction and the stamp are present, not what neighbouring sentences say about them; reviewers read the text. The forbidden-word scan reads every line of every Markdown file under the role folders and `shared/`, raw.
 
 CI (`.github/workflows/check.yml`) runs both commands on every pull request and on pushes to `main`.
 
@@ -105,7 +123,7 @@ To add a skill, create `<role>/skills/<name>.md` (or `shared/<name>.md`) and add
 To add a role:
 
 1. Create `<role>/ROLE.md` with the seven required headings; the title is the role name (`# Release Manager` for `release-manager`).
-2. Unless it is the lead, include the common worker rules (copy them from an existing worker role), with the canonical agent-ban sentence, and end the `## Report` section with the first-line instruction and a line with exactly `ROLE: <role>`.
+2. Unless it is the lead, include the common worker rules (copy them from an existing worker role), with the agent-ban line, and put the first-line instruction and the stamp line `ROLE: <role>` in the `## Report` section.
 3. Add the role to `team.json` with its stamp, instances and bundle (always including `shared/reporting.md` and `shared/verification.md`).
 4. Add a model for it to every file in `models/`, and add it to `model_rules` if it must run on a model different from another role.
 5. Update the approved-team assertions in `tests/` (the repository test pins the six roles).
@@ -125,7 +143,7 @@ A model set picks a provider (`codex` or `claude`), a model family and an effort
 | researcher | codex sol high | claude opus high | codex sol high |
 | arbiter | codex astra xhigh | claude fable high | codex astra xhigh |
 
-`team.json` declares the rule that reviewers and the arbiter must run on a model (provider and family) different from the executor's, so the change is never judged by the model that wrote it. The lead receives the assignment as an input and also checks it against every model that actually authored commits on the pull request, across all rounds. A set may declare an exception to a rule, with a reason. `codex-only` declares one: reviewer #2 shares the executor's family (`sol`), because that provider set has too few distinct families; it runs at a different effort in its own isolated workspace.
+`team.json` declares the rule that reviewers and the arbiter must run on a model (provider and family) different from the executor's. The lead receives the assignment as an input and also checks it against every model that actually authored commits on the pull request, across all rounds. A set may declare an exception to a rule, with a reason. `codex-only` declares one: reviewer #2 shares the executor's family (`sol`), because that provider set has too few distinct families; it runs at a different effort in its own isolated workspace.
 
 A model set file looks like this (abridged):
 
