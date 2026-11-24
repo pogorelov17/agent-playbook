@@ -52,7 +52,7 @@ def role_md(title, stamp=None, ban=True, headings=None):
         if h == "## Rules" and ban:
             parts += [f"- {BAN} Only the lead dispatches agents.", ""]
         if h == "## Report" and stamp:
-            parts += [STAMP_RULE, "", "```", stamp, "```", ""]
+            parts += [STAMP_RULE, "", stamp, ""]
     return "\n".join(parts)
 
 
@@ -473,6 +473,110 @@ class ValidatorTest(unittest.TestCase):
     def test_ban_inside_code_fence_rejected(self):
         self.executor_role(f"- {BAN}", f"```\n{BAN}\n```")
         self.assertError("executor/ROLE.md: missing the agent-ban sentence")
+
+    # --- E5: comments, code, quotes, indentation --------------------------
+
+    def test_ban_inside_multiline_comment_rejected(self):
+        self.executor_role(f"- {BAN}", f"<!--\n- {BAN}\n-->")
+        self.assertError("executor/ROLE.md: missing the agent-ban sentence")
+
+    def test_stamp_inside_comment_rejected(self):
+        self.executor_role("\nROLE: executor\n", "\n<!--\nROLE: executor\n-->\n")
+        self.assertError("executor/ROLE.md: the Report section must contain a line consisting of exactly 'ROLE: executor'")
+
+    def test_stamp_rule_inside_comment_rejected(self):
+        self.executor_role(STAMP_RULE, f"<!-- {STAMP_RULE} -->")
+        self.assertError(f"executor/ROLE.md: the Report section must state {STAMP_RULE!r}")
+
+    def test_heading_inside_comment_is_not_a_heading(self):
+        for comment in ("<!--\n## Extra\n-->", "<!-- start\n# Extra\nExtra\n=====\nend -->"):
+            with self.subTest(comment):
+                self.executor_role("## Rules\n", f"## Rules\n\n{comment}\n")
+                self.assertEqual(self.fx.errors(), [])
+
+    def test_unclosed_comment_hides_the_rest(self):
+        self.executor_role(f"- {BAN}", f"<!-- unclosed\n- {BAN}")
+        self.assertError("executor/ROLE.md: missing the agent-ban sentence")
+
+    def test_forbidden_word_inside_comment_still_reported(self):
+        self.fx.write("shared/reporting.md", "# Reporting\n\n<!-- Use T3. -->\n")
+        self.assertError("shared/reporting.md:3: forbidden word 'T3'")
+
+    def test_indented_ban_rejected(self):
+        for indent in ("    ", "\t"):
+            with self.subTest(repr(indent)):
+                self.executor_role(f"- {BAN}", f"{indent}{BAN}")
+                self.assertError("executor/ROLE.md: missing the agent-ban sentence")
+
+    def test_block_quoted_ban_rejected(self):
+        self.executor_role(f"- {BAN}", f"> {BAN}")
+        self.assertError("executor/ROLE.md: missing the agent-ban sentence")
+
+    def test_stamp_inside_code_fence_rejected(self):
+        self.executor_role("\nROLE: executor\n", "\n```\nROLE: executor\n```\n")
+        self.assertError("executor/ROLE.md: the Report section must contain a line consisting of exactly 'ROLE: executor'")
+
+    def test_indented_or_quoted_stamp_rejected(self):
+        for line in ("    ROLE: executor", "\tROLE: executor", "> ROLE: executor"):
+            with self.subTest(line):
+                self.executor_role("\nROLE: executor\n", f"\n{line}\n")
+                self.assertError("executor/ROLE.md: the Report section must contain a line consisting of exactly 'ROLE: executor'")
+
+    def test_stamp_rule_in_code_indented_or_quoted_rejected(self):
+        for form in (f"```\n{STAMP_RULE}\n```", f"    {STAMP_RULE}", f"> {STAMP_RULE}"):
+            with self.subTest(form):
+                self.executor_role(STAMP_RULE, form)
+                self.assertError(f"executor/ROLE.md: the Report section must state {STAMP_RULE!r}")
+
+    def test_block_quoted_heading_counts_in_role_md(self):
+        for quoted in ("> ## Extra", ">## Extra", "> Extra\n> =====", "> > ### Extra"):
+            with self.subTest(quoted):
+                self.executor_role("## Rules\n", f"## Rules\n\n{quoted}\n")
+                self.assertError("executor/ROLE.md: headings must be exactly")
+
+    def test_block_quote_line_then_rule_is_not_a_setext_heading(self):
+        self.executor_role("## Rules\n", "## Rules\n\n> Quoted\n\n---\n")
+        self.assertEqual(self.fx.errors(), [])
+
+    # --- E5: discovery, paths, model-set fields ----------------------------
+
+    def test_dot_role_folder_discovered(self):
+        self.fx.write(".hidden/ROLE.md", role_md("Hidden", "ROLE: hidden"))
+        self.fx.write(".hidden/skills/h.md", "# H\n")
+        errors = self.assertError(".hidden/ROLE.md: .hidden/ has a ROLE.md but is not a role in team.json")
+        self.assertError(".hidden/skills/h.md: orphan file", errors)
+
+    def test_git_and_github_folders_skipped(self):
+        self.fx.write(".git/ROLE.md", "Run it in a VM.\n")
+        self.fx.write(".github/ROLE.md", "Run it in a VM.\n")
+        self.assertEqual(self.fx.errors(), [])
+
+    def test_bundle_paths_must_be_canonical(self):
+        for rel in ("./shared/reporting.md", "shared//reporting.md", "shared/./reporting.md",
+                    "/shared/reporting.md", "executor/../shared/reporting.md"):
+            with self.subTest(rel):
+                fx = Fixture()
+                self.addCleanup(fx.cleanup)
+                fx.team["roles"]["executor"]["bundle"][1] = rel
+                self.assertError(
+                    f"roles.executor.bundle: {rel!r} must be a canonical relative .md path", fx.errors()
+                )
+
+    def test_duplicate_detected_on_canonical_form(self):
+        self.fx.team["roles"]["executor"]["bundle"].append("shared//reporting.md")
+        self.assertError("roles.executor.bundle lists shared/reporting.md twice")
+
+    def test_model_set_description_must_be_string(self):
+        for value in (5, ["text"], None):
+            with self.subTest(repr(value)):
+                fx = Fixture()
+                self.addCleanup(fx.cleanup)
+                fx.model_set["description"] = value
+                self.assertError("models/one.json: description must be a string", fx.errors())
+
+    def test_model_set_description_string_accepted(self):
+        self.fx.model_set["description"] = "One provider."
+        self.assertEqual(self.fx.errors(), [])
 
     def test_lead_needs_no_ban_or_stamp(self):
         self.fx.write("lead/ROLE.md", role_md("Lead", stamp=None, ban=False))
