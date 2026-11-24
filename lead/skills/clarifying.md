@@ -48,7 +48,4 @@ When the answers are in, write the agreement back in one short block: the task, 
 ## Pitfalls
 
 - Asking about things you could find out yourself by reading the code (via a scout) or by reasoning.
-- Asking open questions ("How should storage work?") instead of offering options with a recommendation.
-- Bundling several decisions into one question, so one answer leaves the others unclear.
 - Treating silence or "sounds good" on a long message as agreement to every point. If a decision is important, ask it so it cannot be skipped.
-- Starting a scout or an executor "to save time" before the owner has answered.

@@ -30,9 +30,15 @@ tests/                    unit tests for the validator
 .github/workflows/        CI: runs the validator and the tests
 ```
 
-Every `ROLE.md` has exactly these headings, in this order: `# <Role name>`, `## Who you are`, `## What you receive`, `## What you must deliver`, `## Rules`, `## You must not`, `## Report`. Deeper headings (`###`) inside sections are free.
+Every `ROLE.md` has exactly these headings, in this order: `# <Role name>`, `## Who you are`, `## What you receive`, `## What you must deliver`, `## Rules`, `## You must not`, `## Report`, and no other heading of any level (ATX `#` or setext underline). Inside a section, structure with bold lead-in labels or numbered paragraphs. Skills and shared files may use sub-headings.
 
 Every role except `lead` states, in its `ROLE.md`: the ban on starting other agents, the duty to read and follow the project's own instruction file (`AGENTS.md` or `CLAUDE.md`), and its report stamp (`ROLE: <role>`), which must be the first line of every report.
+
+The ban is one canonical sentence. It must appear as a complete sentence, outside code, at the start of a line (optionally after a list marker); further sentences may follow it on the line, but nothing may be added to it:
+
+> You never start, spawn, schedule or delegate to other agents, sub-agents, threads, workflows or new machines, even when a tool or a built-in skill offers it.
+
+The stamp is a line consisting of exactly `ROLE: <role>` inside the `## Report` section, which also states `The first line of every report is exactly:`.
 
 ## How a bundle is assembled
 
@@ -75,11 +81,15 @@ python3 -m unittest discover -s tests       # tests for the validator
 
 - `team.json` matches the format (schema 1; each role has stamp `ROLE: <name>`, a positive `instances`, and a bundle that starts with its `ROLE.md`, then its own files, then `shared/` files);
 - every file it names exists, including the model sets;
-- no Markdown file under a role folder or `shared/` is left out of every bundle (no orphans);
-- every `ROLE.md` has the required headings, in order;
-- no role or skill text contains the launcher-specific words the project bans (see `FORBIDDEN` in `scripts/check.py`); texts say "isolated workspace", "the lead", "the owner" instead;
-- every non-lead `ROLE.md` contains the agent-ban sentence (`You never start, spawn, schedule or delegate to other agents`) and a line consisting of exactly its stamp;
-- every model set covers every role with the right number of entries and satisfies `model_rules`, allowing only its declared exceptions.
+- every top-level folder that contains a `ROLE.md` is a role in `team.json`;
+- no Markdown file (`.md` or `.markdown`, in any letter case) under a role folder or `shared/` is left out of every bundle (no orphans);
+- every `ROLE.md` has exactly the required headings, in order, and no others;
+- no role or skill text contains the launcher-specific words the project bans (whole words, case-sensitive; see `FORBIDDEN` in `scripts/check.py`); texts say "isolated workspace", "the lead", "the owner" instead;
+- every non-lead `ROLE.md` contains the canonical agent-ban sentence and, in its `## Report` section, the stamp line and the first-line instruction;
+- every model set covers every role with the right number of entries and satisfies `model_rules`, allowing only its declared exceptions; families are compared ignoring letter case and surrounding spaces;
+- every `models/*.json` file is listed in `model_sets`.
+
+Files that are not valid UTF-8, and fields of the wrong JSON type, are reported as errors with the file and field named.
 
 CI (`.github/workflows/check.yml`) runs both commands on every pull request and on pushes to `main`.
 
@@ -87,12 +97,12 @@ CI (`.github/workflows/check.yml`) runs both commands on every pull request and 
 
 To change a role, edit its `ROLE.md` or skills and run `python3 scripts/check.py`. Keep the required headings. Write for an agent that knows nothing else: imperative, specific, each non-obvious rule with a one-line reason.
 
-To add a skill, create `<role>/skills/<name>.md` (or `shared/<name>.md`) and add it to the bundle of every role that needs it in `team.json`. An unbundled file fails the check as an orphan.
+To add a skill, create `<role>/skills/<name>.md` (or `shared/<name>.md`) and add it to the bundle of every role that needs it in `team.json`. An unbundled file fails the check as an orphan, and so does every file of a role folder that is not in `team.json`.
 
 To add a role:
 
 1. Create `<role>/ROLE.md` with the seven required headings; the title is the role name (`# Release Manager` for `release-manager`).
-2. Unless it is the lead, include the common worker rules (copy them from an existing worker role), with the agent-ban sentence and a line with exactly `ROLE: <role>`.
+2. Unless it is the lead, include the common worker rules (copy them from an existing worker role), with the canonical agent-ban sentence, and end the `## Report` section with the first-line instruction and a line with exactly `ROLE: <role>`.
 3. Add the role to `team.json` with its stamp, instances and bundle (always including `shared/reporting.md` and `shared/verification.md`).
 4. Add a model for it to every file in `models/`, and add it to `model_rules` if it must run on a model different from another role.
 5. Run the validator and the tests.
@@ -111,7 +121,7 @@ A model set picks a provider (`codex` or `claude`), a model family and an effort
 | researcher | codex sol high | claude opus high | codex sol high |
 | arbiter | codex astra xhigh | claude fable high | codex astra xhigh |
 
-`team.json` declares the rule that reviewers and the arbiter must run on a model (provider and family) different from the executor's, so the change is never judged by the model that wrote it. A set may declare an exception to a rule, with a reason. `codex-only` declares one: reviewer #2 shares the executor's family (`sol`), because that provider set has too few distinct families; it runs at a different effort in its own isolated workspace.
+`team.json` declares the rule that reviewers and the arbiter must run on a model (provider and family) different from the executor's, so the change is never judged by the model that wrote it. The lead receives the assignment as an input and also checks it against every model that actually authored commits on the pull request, across all rounds. A set may declare an exception to a rule, with a reason. `codex-only` declares one: reviewer #2 shares the executor's family (`sol`), because that provider set has too few distinct families; it runs at a different effort in its own isolated workspace.
 
 A model set file looks like this (abridged):
 

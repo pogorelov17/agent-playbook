@@ -2,6 +2,8 @@
 
 Fixing a symptom you do not understand creates a second bug and hides the first. Find the cause first, then fix it once.
 
+**Who does what.** Instrumenting and fixing are for the executor only. A read-only role (see `shared/verification.md`) stops once the cause is established and reports it; it may instrument (logging, assertions, a test) only inside the throwaway copy that file describes.
+
 ## Process
 
 Work these phases in order. Do not skip ahead because a fix "looks obvious".
@@ -45,5 +47,5 @@ Work these phases in order. Do not skip ahead because a fix "looks obvious".
 ## Rules
 
 - No fix without a stated cause. "Added a retry and it went away" is not a cause.
-- Never silence the symptom: no swallowing exceptions, no skipping or loosening the failing test, no widening a timeout without knowing why it is exceeded.
+- Never silence the symptom: no swallowing exceptions, no widening a timeout without knowing why it is exceeded.
 - In your report, give the symptom, the reproduction, the cause and the evidence for it, the fix, and the verification output. If the cause is not found, say so and list the hypotheses you ruled out and how.

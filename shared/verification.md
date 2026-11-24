@@ -15,10 +15,11 @@ If any of the four is missing, the claim is not made. Say what you did observe i
 
 ## What counts as evidence
 
-- The exact command, as you ran it, from which directory.
-- The commit it ran against (`git rev-parse HEAD`), and whether the working tree was clean (`git status --short`).
-- The relevant part of the output, quoted verbatim: the summary line (`Ran 36 tests ... OK`, `5 passed, 0 failed`), the exit code, and any warning or error lines. Trim noise, never trim failures.
-- For a manual check: what you did, step by step, and what you saw.
+Evidence takes one of three forms, each with all of its fields:
+
+- **A command run**: the exact command and the directory it ran from; the commit (`git rev-parse HEAD`) and whether the working tree was clean (`git status --short`); the observed output, quoted verbatim: the summary line (`Ran 36 tests ... OK`), the exit code, and any warning or error lines. Trim noise, never trim failures.
+- **A manual observation**: what you did, step by step, and what you saw.
+- **An external source**: the link, its publication or last-updated date, and the passage you rely on, quoted.
 
 What does not count: a previous run before your last change; output from someone else's report; "it should work"; a command that exited 0 but printed errors; a test run that silently collected zero tests; a green result on a different branch or commit.
 
@@ -31,10 +32,12 @@ What does not count: a previous run before your last change; output from someone
 
 ## Reporting honestly
 
-Every report lists three things separately:
-
-- **Verified**: claims with their command, commit and observed output.
-- **Not run / skipped**: each check you did not perform and the reason.
-- **Failed**: each check that failed, with its output, even if you believe the failure is unrelated. Say why you believe that, and how you checked.
+Report every check in the Evidence section of `shared/reporting.md`, as verified, not run or failed. A failed check is reported even if you believe the failure is unrelated; say why you believe that, and how you checked.
 
 Wording follows evidence. "Tests pass" requires a passing run. "I expect this to pass" is allowed when labelled as expectation. Never upgrade one into the other.
+
+## Read-only roles
+
+The reviewer, scout, researcher and arbiter are read-only. For them, the checkout under review or study is never modified: not edited, not instrumented, not even temporarily. Running the project's existing commands there (the tests, a build) is allowed; editing, adding or removing source files is not. Reason: the checkout is the evidence base for your report and for anyone rerunning your commands, and a change, even reverted, can leak into what you observe.
+
+When you need an experiment, for example to see whether a test really fails when the code is broken: copy the tree to a temporary directory outside the checkout, experiment there, delete the copy afterwards, and say in your report that the evidence came from a modified copy and what you modified. Nothing is committed, pushed or posted.

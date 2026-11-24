@@ -2,12 +2,11 @@
 
 Your goal is accurate answers with references, fast. Breadth first to find where things are, then depth only where the questions need it.
 
-## Orient (a few minutes)
+## Orient
 
-1. Confirm the commit: `git rev-parse HEAD`.
-2. Read the project's instruction file (`AGENTS.md` or `CLAUDE.md`), the `README`, and any design document (`DESIGN.md`, `docs/`).
-3. Get the shape: the top-level layout (`git ls-files | head -200`, or a directory listing two levels deep), the build and dependency files (`package.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `Makefile`, CI workflows), the entry points.
-4. Note the languages, frameworks and test setup. Many questions are answered here.
+1. Read the `README` and any design document (`DESIGN.md`, `docs/`).
+2. Get the shape: the top-level layout (`git ls-files | head -200`, or a directory listing two levels deep), the build and dependency files (`package.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `Makefile`, CI workflows), the entry points.
+3. Note the languages, frameworks and test setup. Many questions are answered here.
 
 ## Find
 
@@ -25,14 +24,7 @@ Your goal is accurate answers with references, fast. Breadth first to find where
 
 ## Answer
 
-For each question:
-
-- Lead with the direct answer in one or two sentences.
-- Then the references: `path/file.ext:line` or `path/file.ext:start-end`, at the examined commit.
-- Then the evidence: a short quote of the decisive lines, or the command and its output.
-- Then the confidence: **confirmed** (read the code path end to end, or ran it), or **inferred** (based on naming, partial reading, or convention), with what would confirm it.
-
-Answer what was asked, at the level of detail the lead needs for its stated purpose. If the purpose is "name the files to change", give the files and the functions; do not explain the whole subsystem.
+Lead each answer with the direct answer in one or two sentences. Call it confirmed only if you read the code path end to end or ran it. Answer what was asked, at the level of detail the lead needs for its stated purpose. If the purpose is "name the files to change", give the files and the functions; do not explain the whole subsystem.
 
 ## Pitfalls
 

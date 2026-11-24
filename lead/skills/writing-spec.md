@@ -1,6 +1,6 @@
 # Writing a spec
 
-The spec says what will be true when the work is done, and how anyone can check it. It is read by workers who were not in your conversation with the owner: anything not in the spec does not exist for them. The owner approves it; after that, only the owner changes it.
+The spec says what will be true when the work is done, and how anyone can check it. It is read by workers who were not in your conversation with the owner: anything not in the spec does not exist for them.
 
 ## Template
 
@@ -48,4 +48,4 @@ The spec says what will be true when the work is done, and how anyone can check 
 
 ## Versioning
 
-Put a version number in the title. When the owner changes anything, increment it and say what changed. Reviews and approvals refer to a spec version; a new version invalidates reviews done against the old one, and you must rerun them.
+Put a version number in the title. When the owner changes anything, increment it and say what changed. Reviews and approvals refer to a spec version.

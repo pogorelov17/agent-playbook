@@ -18,7 +18,7 @@ For each step, in order (unless the plan's dependencies allow reordering):
 3. Run the step's verification command. Compare its output with the expected output in the plan.
 4. Run the wider test suite if the change could affect other areas.
 5. Commit the step.
-6. Tick the step in your working copy of the checklist, and note the evidence: command, commit, observed output.
+6. Tick the step in the plan checklist (in your working copy until the pull request exists, then in its description), and record the step's evidence (command, commit, observed output) in your running log; it goes into your report's Evidence section.
 
 Keep a running log of steps, commits and evidence as you go. It becomes your report and the pull request description; reconstructing it at the end is error-prone.
 
@@ -45,9 +45,6 @@ Stop the affected part of the work and return a question to the lead when:
 
 When you stop, report `NEEDS_CONTEXT` or `BLOCKED`, describe the problem precisely, give the options you see with your recommendation and the consequences of each, and say what you completed and verified meanwhile. Continue with independent steps if they are unaffected, and say so.
 
-## Finishing
+## Updating the pull request in a repair round
 
-- Run every acceptance check and the full test suite on the final commit with a clean working tree.
-- Confirm every step is ticked or explicitly reported as not done, with the reason.
-- Open the draft pull request with the spec and the ticked plan in the description, plus deviations and assumptions.
-- Report the exact head SHA after your last push.
+Push the new commits to the same branch; the pull request picks them up and stays a draft. Edit its description: add a section for the round listing what changed per finding, and tick any plan steps the round completes. Leave the spec and the earlier rounds as they are.
