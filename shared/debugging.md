@@ -2,7 +2,7 @@
 
 Fixing a symptom you do not understand creates a second bug and hides the first. Find the cause first, then fix it once.
 
-**Who does what.** Instrumenting and fixing are for the executor only. A read-only role (see `shared/verification.md`) stops once the cause is established and reports it; it may instrument (logging, assertions, a test) only inside the throwaway copy that file describes.
+**Who does what.** This file covers finding the cause. Fixing it is the executor's work, described in its own skills. A read-only role (see `shared/verification.md`) stops once the cause is established and reports it; it may instrument (logging, assertions, a test) only inside the throwaway copy that file describes.
 
 ## Process
 
@@ -30,13 +30,6 @@ Work these phases in order. Do not skip ahead because a fix "looks obvious".
 - If the prediction fails, the hypothesis is wrong. Revert the experiment and form a new one; do not stack fixes.
 - After three failed hypotheses, stop and question your assumptions: the environment, the version actually running, whether the code you are reading is the code being executed.
 
-### 4. Fix and verify
-
-- Fix the cause, not the place where the symptom surfaced. If you can only fix the symptom, say so explicitly in your report.
-- Make the minimal change that removes the cause. Unrelated cleanup goes in a separate change.
-- Rerun the reproduction: it must now pass. Rerun the full relevant suite: nothing else may break.
-- Remove temporary logging and experiments before committing.
-
 ## Intermittent failures
 
 - Do not call an intermittent failure fixed after one green run.
@@ -47,5 +40,4 @@ Work these phases in order. Do not skip ahead because a fix "looks obvious".
 ## Rules
 
 - No fix without a stated cause. "Added a retry and it went away" is not a cause.
-- Never silence the symptom: no swallowing exceptions, no widening a timeout without knowing why it is exceeded.
-- In your report, give the symptom, the reproduction, the cause and the evidence for it, the fix, and the verification output. If the cause is not found, say so and list the hypotheses you ruled out and how.
+- In your report, give the symptom, the reproduction, the cause and the evidence for it. If the cause is not found, say so and list the hypotheses you ruled out and how.

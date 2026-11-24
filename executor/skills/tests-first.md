@@ -24,6 +24,17 @@ For documentation, configuration, a CI workflow or similar, there is no behaviou
 
 Report which check you chose and its output.
 
+## Fixing a bug
+
+Once `shared/debugging.md` has established the cause and the reproduction is a failing test:
+
+- Fix the cause, not the place where the symptom surfaced. If you can only fix the symptom, say so explicitly in your report.
+- Make the minimal change that removes the cause. Unrelated cleanup goes in a separate change.
+- Never silence the symptom: no swallowing exceptions, no widening a timeout without knowing why it is exceeded.
+- Rerun the reproduction: it must now pass. Rerun the full relevant suite: nothing else may break.
+- Remove temporary logging and experiments before committing.
+- Report the fix and the verification output alongside the cause.
+
 ## Never
 
 - Never change a test silently. If a test is wrong, say why, fix it deliberately, and report it as a deviation.

@@ -19,7 +19,7 @@ Never include an instruction to start, spawn or delegate to other agents. If the
 - **Scout**: the specific questions, numbered; the commit to examine; what you will use the answers for (so it knows what detail matters).
 - **Researcher**: the questions; the decision they inform; how recent sources must be; any sources to prefer or avoid.
 - **Executor**: the task branch name; in a repair round, the review findings to address and the existing pull request URL.
-- **Reviewer**: the pull request URL and the exact commit to review. Never the other reviewer's report.
+- **Reviewer**: the pull request URL and the exact commit to review; in a replacement review, only the arbiter's ruling section(s) for the verdict being replaced. Never the other reviewer's report.
 - **Arbiter**: the pull request URL and the exact commit under dispute; both reviewers' reports, only after both are finished; the executor's response, if any; the specific disputed claims.
 
 ## Handling the status a worker returns

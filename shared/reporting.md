@@ -19,9 +19,9 @@ One to three sentences: what was asked, what you did, the result.
 The concrete actions and outputs: files changed, branch, commit, pull request, findings, answers.
 
 ## Evidence
-Three lists, each item in one of the evidence forms of shared/verification.md:
-- Verified: each claim with its evidence.
-- Not run: each check you did not perform, and why.
+Three lists:
+- Verified: each claim with its evidence, in the form shared/verification.md gives for it.
+- Not run: each check you did not perform, and the reason.
 - Failed: each check that failed, with its output.
 
 ## Deviations
@@ -40,9 +40,9 @@ The first line is exactly the stamp, with nothing before it: no greeting, no bla
 
 ## Statuses
 
-Pick exactly one. The status says whether the work you were assigned is complete, not whether its outcome is good: a finished review is `DONE` whether the verdict is `APPROVE` or `REQUEST_CHANGES`.
+Pick exactly one. The status says whether the work you were assigned is complete, not whether its outcome is good or whether the lead must act next: a finished review is `DONE` whether the verdict is `APPROVE` or `REQUEST_CHANGES`. A completed review always carries exactly one verdict; a `NEEDS_CONTEXT` or `BLOCKED` review report is interim, carries no verdict, and names exactly what is missing.
 
-- `DONE` — the assigned work is complete and verified. Nothing left that the lead must act on.
+- `DONE` — the assigned work is complete and verified.
 - `DONE_WITH_CONCERNS` — complete and verified, but you saw something the lead should weigh: a risk, a design smell, a check you could not run, an assumption that matters. Name each concern.
 - `NEEDS_CONTEXT` — you cannot finish without information you lack. Say exactly what you need and why, and what you finished meanwhile.
 - `BLOCKED` — you cannot proceed: a contradiction in the spec, missing access, a broken environment, a rule you would have to break. Say what blocks you, what you tried, and what would unblock you.

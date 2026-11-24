@@ -31,7 +31,7 @@ Each finding:
 [BLOCKING] src/export.py:42 — rows over the limit are silently truncated instead of rejected.
 Consequence: users lose data without an error; violates acceptance criterion 4.
 Evidence: `python -m pytest tests/test_export.py -k limit` → 1 failed: expected 413, got 200
-          (test written in a throwaway copy of the tree; the checkout is unmodified).
+          (from a modified copy: this test added in a throwaway copy of the tree).
 ```
 
 - Be precise and neutral. Say what is wrong and why it matters; propose a fix only when it helps understanding.

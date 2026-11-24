@@ -1,25 +1,13 @@
 # Verification
 
-A claim is worth only the evidence behind it. The reader of your report cannot see your workspace; they act on what you write. A false "it passes" costs more than an honest "not run".
+Each kind of claim has the evidence form that proves it. A false "it passes" costs more than an honest "not run".
 
-## The rule
+## Evidence by kind of claim
 
-Never write "done", "fixed", "passing", "works", "no issues" or anything that implies them unless, in this session, you have:
+- **Code behaviour** ("done", "fixed", "passing", "works", "no issues", or anything implying them) needs **a command run**: in this session, on the commit you report, with the whole relevant output read and saying what you claim. Give the exact command and the directory it ran from; the commit (`git rev-parse HEAD`) and whether the working tree was clean (`git status --short`); the observed output, quoted verbatim: the summary line (`Ran 36 tests ... OK`), the exit code, and any warning or error lines. Trim noise, never trim failures.
+- Other claims rest on **a manual observation** (what you did, step by step, and what you saw) or **an external source** (the link, its publication or last-updated date, and the passage you rely on, quoted).
 
-1. run the command that proves it,
-2. on the commit you are reporting,
-3. read the whole relevant output, including the exit status and the summary line,
-4. and seen it say what you claim.
-
-If any of the four is missing, the claim is not made. Say what you did observe instead.
-
-## What counts as evidence
-
-Evidence takes one of three forms, each with all of its fields:
-
-- **A command run**: the exact command and the directory it ran from; the commit (`git rev-parse HEAD`) and whether the working tree was clean (`git status --short`); the observed output, quoted verbatim: the summary line (`Ran 36 tests ... OK`), the exit code, and any warning or error lines. Trim noise, never trim failures.
-- **A manual observation**: what you did, step by step, and what you saw.
-- **An external source**: the link, its publication or last-updated date, and the passage you rely on, quoted.
+A claim is complete when its form has all its fields; otherwise the claim is not made, and you say what you did observe instead. A role with no repository, such as a researcher answering from sources, can report `DONE`.
 
 What does not count: a previous run before your last change; output from someone else's report; "it should work"; a command that exited 0 but printed errors; a test run that silently collected zero tests; a green result on a different branch or commit.
 
@@ -38,6 +26,8 @@ Wording follows evidence. "Tests pass" requires a passing run. "I expect this to
 
 ## Read-only roles
 
-The reviewer, scout, researcher and arbiter are read-only. For them, the checkout under review or study is never modified: not edited, not instrumented, not even temporarily. Running the project's existing commands there (the tests, a build) is allowed; editing, adding or removing source files is not. Reason: the checkout is the evidence base for your report and for anyone rerunning your commands, and a change, even reverted, can leak into what you observe.
+The reviewer, scout, researcher and arbiter are read-only. A read-only role never changes a tracked file, and never commits, pushes or posts. It runs the project's own commands (the tests, a build, the acceptance commands) directly on the pinned commit; by-products those commands create on their own (caches, build output, anything ignored by version control) are acceptable and are never committed. Reason: the checkout is the evidence base for your report and for anyone rerunning your commands.
 
-When you need an experiment, for example to see whether a test really fails when the code is broken: copy the tree to a temporary directory outside the checkout, experiment there, delete the copy afterwards, and say in your report that the evidence came from a modified copy and what you modified. Nothing is committed, pushed or posted.
+Any experiment that requires changing a tracked file, for example breaking the code to see whether a test really fails, happens in a throwaway copy of the tree outside the checkout, deleted afterwards. Evidence from it is labelled as coming from a modified copy and says what was modified.
+
+Before reporting, confirm the checkout has no tracked changes: `git status --short` shows none.

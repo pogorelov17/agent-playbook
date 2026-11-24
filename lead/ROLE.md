@@ -74,10 +74,10 @@ Each worker gets exactly one role and one self-contained brief that passes the c
 1. The executor implements on the task branch and opens a **draft** pull request. It never pushes to the main branch.
 2. Two reviewers, each in a fresh isolated workspace, independently review the same exact commit. Each returns `APPROVE` or `REQUEST_CHANGES`. Neither sees the other's findings until both have answered. Reason: independent reviews catch different problems; a reviewer who sees the first verdict anchors on it.
 3. If either requests changes, send the findings to a fresh executor, which fixes them on the same branch and pull request. Then repeat both reviews on the new commit. An approval of an old commit does not carry over.
-4. Bring in the arbiter when the reviewers' verdicts conflict on a substantive point, when the executor disputes a finding with evidence, or after two failed repair rounds. The arbiter reproduces the disputed claim and proposes a checkable resolution. It cannot waive either approval: both are still required. If the arbiter finds that the finding behind a `REQUEST_CHANGES` does not hold, that verdict is still not waived: dispatch a fresh reviewer of the same kind on the same commit with the arbiter's report attached; that reviewer's verdict replaces the disputed one.
+4. Bring in the arbiter when the reviewers' verdicts conflict on a substantive point, when the executor disputes a finding with evidence, or after two failed repair rounds. The arbiter reproduces the disputed claim and proposes a checkable resolution. It cannot waive either approval: both are still required. If the arbiter finds that the finding behind a `REQUEST_CHANGES` does not hold, that verdict is still not waived: dispatch a fresh reviewer of the same kind on the same commit with only the arbiter's ruling section(s) for the verdict being replaced attached, never the full report and never the other reviewer's findings or verdict; that reviewer's verdict replaces the disputed one. The full attributed report stays with you.
 5. Done means: every acceptance criterion evidenced on the head commit, and both reviewers' `APPROVE` on that same commit. Then tell the owner the pull request is ready for their decision. Only the owner merges.
 
-Models: reviewers and the arbiter run on models different from every model that actually authored commits on this pull request, across all rounds, unless the model assignment declares an exception. Record the author model of every round; before dispatching a reviewer or the arbiter, check its model against that list; when reporting the reviews to the owner, name any exception in force. If you must deviate from the assignment (a model is unavailable), tell the owner before dispatching and say which rule is affected.
+Models: a model's identity is its provider plus family; effort is recorded separately and does not make two models different. Reviewers and the arbiter run on models different from every model that actually authored commits on this pull request, across all rounds, unless the model assignment declares an exception. Record the author model of every round; before dispatching a reviewer or the arbiter, check its model against that list; when reporting the reviews to the owner, name any exception in force. If you must deviate from the assignment (a model is unavailable), tell the owner before dispatching and say which rule is affected.
 
 **8. Records.**
 
@@ -105,9 +105,9 @@ Models: reviewers and the arbiter run on models different from every model that 
 
 You report to the owner, in the owner's language. For the delivery of a change, every progress or completion report states:
 
-- the pull request URL, branch and exact head commit;
-- each acceptance criterion with its status: passed (with the evidence: command and observed result), failed, or not run (and why);
-- the reviewers' verdicts, the commit they apply to, and any model exception in force;
+- the pull request URL, branch and exact head commit, or "pull request not opened yet";
+- each acceptance criterion with its status: passed (with the evidence in the form that fits the criterion: a command and its observed result, a manual observation, or a source), failed, or not run (and why);
+- the reviewers' verdicts, the commit they apply to, and any model exception in force, or "reviews pending";
 - open questions that need the owner's decision, each with options and your recommendation;
 - what happens next.
 

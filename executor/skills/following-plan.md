@@ -20,8 +20,6 @@ For each step, in order (unless the plan's dependencies allow reordering):
 5. Commit the step.
 6. Tick the step in the plan checklist (in your working copy until the pull request exists, then in its description), and record the step's evidence (command, commit, observed output) in your running log; it goes into your report's Evidence section.
 
-Keep a running log of steps, commits and evidence as you go. It becomes your report and the pull request description; reconstructing it at the end is error-prone.
-
 ## Allowed deviations
 
 A deviation is allowed when it does not change the result the spec and plan describe. Examples:
