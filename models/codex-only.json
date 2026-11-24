@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "name": "codex-only",
+  "description": "Every role runs on the codex provider.",
+  "roles": {
+    "lead": {"provider": "codex", "family": "astra", "effort": "high"},
+    "executor": {"provider": "codex", "family": "sol", "effort": "medium"},
+    "reviewer": [
+      {"provider": "codex", "family": "astra", "effort": "high"},
+      {"provider": "codex", "family": "sol", "effort": "high"}
+    ],
+    "scout": {"provider": "codex", "family": "luna", "effort": "low"},
+    "researcher": {"provider": "codex", "family": "sol", "effort": "high"},
+    "arbiter": {"provider": "codex", "family": "astra", "effort": "xhigh"}
+  },
+  "exceptions": [
+    {
+      "role": "reviewer",
+      "instance": 2,
+      "must_differ_from": "executor",
+      "reason": "This provider set has too few distinct families for two reviewers and an arbiter; reviewer #2 shares the executor's family (sol) but runs at a different effort in its own isolated workspace."
+    }
+  ]
+}
