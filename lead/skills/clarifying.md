@@ -1,6 +1,6 @@
 # Clarifying
 
-Goal: before any worker starts, every decision that is expensive to reverse is made by the owner, explicitly. Cheap decisions you make yourself and record as assumptions.
+Goal: before any worker starts, every decision that is expensive to reverse is made by the owner, explicitly. The one exception is a read-only scout the owner authorises to establish facts those decisions depend on (section 4). Cheap decisions you make yourself and record as assumptions.
 
 ## 1. Restate the task
 

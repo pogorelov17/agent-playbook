@@ -24,7 +24,7 @@ Your goal is accurate answers with references, fast. Breadth first to find where
 
 ## Answer
 
-Lead each answer with the direct answer in one or two sentences. Call it confirmed only if you read the code path end to end or ran it. Answer what was asked, at the level of detail the lead needs for its stated purpose. If the purpose is "name the files to change", give the files and the functions; do not explain the whole subsystem.
+Lead each answer with the direct answer in one or two sentences. Label its basis as role rule 3 sets out: read, run, or inferred. Answer what was asked, at the level of detail the lead needs for its stated purpose. If the purpose is "name the files to change", give the files and the functions; do not explain the whole subsystem.
 
 ## Pitfalls
 

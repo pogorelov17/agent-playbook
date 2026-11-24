@@ -4,10 +4,11 @@ The plan tells the executor how to reach the spec. Write it for a capable engine
 
 ## What the plan fixes
 
-- **Files**: the exact paths to create or change. If you do not know them, send a scout first; never guess a path.
+- **Files**: the exact paths to create or change.
 - **Names and signatures**: functions, classes, commands, flags, configuration keys, with their parameters and return types where they matter.
 - **Values from the spec**: copied verbatim (formats, limits, messages, versions). Do not paraphrase a value; paraphrase creates a second, slightly different value.
-- **Commands**: how to install, build, run the tests, and run each acceptance check, exactly as typed.
+- **Commands**: how to install, build and run the tests, exactly as typed.
+- **Acceptance checks**: each in the spec's form, its command or its manual steps and expected observation; never replaced by a weaker command. Per-step verification commands are additional.
 - **Living documents**: which ones (for example `DESIGN.md`, `README.md`) must be updated, and with what.
 
 What the plan leaves open: anything that is cheap to change and does not affect the result. Say so ("helper names are yours") so the executor does not ask.
@@ -39,14 +40,14 @@ Rules for steps:
 - Top: the goal (see the lead role), the spec version it implements, the repository, base branch and commit, the task branch name.
 - Then: a short "approach" paragraph: the design in a few sentences, so the steps make sense as a whole.
 - Then: the steps, in order.
-- End: the final verification step (run every acceptance check and the full test suite on the head commit), and the pull request step (open a draft pull request with the spec and the ticked checklist in the description).
+- End: the pull request step (open a draft pull request with the spec and the ticked checklist in the description) and the final verification step (every acceptance check in the spec's form, and the full test suite, on the head commit). A check that needs the pull request or hosted CI is ordered after the pull request exists.
 
 ## Splitting large work
 
 If the plan has more steps than one reviewer can review well in one sitting, or touches unrelated areas, split it into sequential pull requests. Each slice:
 
 - delivers something that works and can be reviewed on its own;
-- has its own part of the plan, its own subset of acceptance criteria, and its own two reviews;
+- has its own subset of acceptance criteria;
 - starts from the merged result of the previous slice, or from the previous slice's branch if the owner agrees to stacking.
 
 ## Before sending

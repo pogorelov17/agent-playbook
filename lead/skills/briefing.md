@@ -1,18 +1,16 @@
 # Briefing workers
 
-A worker starts with nothing but its role instructions and your brief. It cannot ask a colleague, read your conversation, or see another worker's output. If the brief is incomplete, the worker either stops and asks (a wasted round) or guesses (a wrong result). Write the brief so neither happens.
+If the brief is incomplete, the worker either stops and asks (a wasted round) or guesses (a wrong result). Write the brief so neither happens.
 
 ## Checklist for every brief
 
-1. **One role.** Name it, and say which stamp the report must start with. Never mix roles ("review and then fix"); dispatch two workers instead.
+1. **One role.** Name it. Never mix roles ("review and then fix"); dispatch two workers instead.
 2. **The outcome wanted**, in one or two sentences, and how it will be judged.
 3. **Inputs**: the spec and plan as read-only files, when they exist for this phase (say where they are); any earlier reports the worker needs; anything else it must read.
-4. **Repository**: the URL, the base branch and the exact base commit SHA.
+4. **Repository**, when the assignment uses one: the URL, the base branch and the exact base commit SHA.
 5. **Permissions**: what the worker may do (read, run tests, create a branch, push to the task branch, open a draft pull request, browse the web) and what it may not.
 6. **Scope limits**: what is out of scope, which files or areas must not be touched, the time or effort expected.
 7. **Report format**: the stamp, the status, and any extra fields you need (for example "the word count of each bundle", "the exact head SHA").
-
-Never include an instruction to start, spawn or delegate to other agents. If the work needs more hands, you dispatch more workers.
 
 ## Briefs per role
 

@@ -38,7 +38,6 @@ Stop the affected part of the work and return a question to the lead when:
 - the plan contradicts the spec, or the spec contradicts itself;
 - following the plan would change a public interface, a data format, the architecture, or the scope in a way the spec does not state;
 - a step cannot work as written and every fix you see changes the result;
-- the base is not what the brief said (wrong origin, wrong commit);
 - you would have to break a rule of your role to continue.
 
 When you stop, report `NEEDS_CONTEXT` or `BLOCKED`, describe the problem precisely, give the options you see with your recommendation and the consequences of each, and say what you completed and verified meanwhile. Continue with independent steps if they are unaffected, and say so.

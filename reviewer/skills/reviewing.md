@@ -37,5 +37,3 @@ Evidence: `python -m pytest tests/test_export.py -k limit` → 1 failed: expecte
 - Be precise and neutral. Say what is wrong and why it matters; propose a fix only when it helps understanding.
 - One problem per finding. If the same problem appears in several places, list the places in one finding.
 - If you are not sure, say so and say what would settle it. Do not inflate uncertainty into a blocking finding or deflate a real problem into a note.
-
-Before sending, reread each finding: does it name a place, a consequence and evidence that someone else can reproduce? If not, fix it or drop it.

@@ -17,6 +17,6 @@ In a repair round you receive the reviewers' findings through the lead. Your job
 - No agreeing for politeness. "Good catch, fixed" without checking produces changes nobody verified, and sometimes breaks correct code.
 - No dismissing for convenience either. A finding you cannot refute is not disputed: it is confirmed if the evidence above supports it, and unclear otherwise.
 - Never close an objection yourself. You report your outcome; the reviewers re-review the new commit, and the lead decides on disputes (with the arbiter if needed).
-- Return disputed and unclear findings to the lead in your report, with the evidence or what is missing. Do not argue in the pull request.
+- Do not argue in the pull request.
 - Fix the cause, not the symptom the reviewer pointed at. If the same problem exists elsewhere, fix it there too and say so.
 - Keep the scope: a finding does not license unrelated changes. If you notice something unrelated, report it.

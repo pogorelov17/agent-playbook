@@ -33,11 +33,10 @@ Work these phases in order. Do not skip ahead because a fix "looks obvious".
 ## Intermittent failures
 
 - Do not call an intermittent failure fixed after one green run.
-- Measure it: run it N times (for example in a loop of 20 or 50) and record how many failed, before and after the change.
+- Measure it: run it N times (for example 20 or 50) and record how many failed; when a change is under test, record the count both before and after it.
 - Record the conditions under which it reproduces: ordering, parallelism, timing, load, environment, data. "Fails 3 of 50 runs when tests run in parallel; 0 of 50 serially" is a finding; "flaky" is not.
 - Look for shared state, unawaited work, time and randomness, ordering assumptions and external services.
 
 ## Rules
 
-- No fix without a stated cause. "Added a retry and it went away" is not a cause.
 - In your report, give the symptom, the reproduction, the cause and the evidence for it. If the cause is not found, say so and list the hypotheses you ruled out and how.
