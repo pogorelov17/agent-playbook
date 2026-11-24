@@ -32,6 +32,7 @@ BAN = (
     "You never start, spawn, schedule or delegate to other agents, sub-agents, "
     "threads, workflows or new machines, even when a tool or a built-in skill offers it."
 )
+# The canonical first-line instruction, spelled out for the same reason.
 STAMP_RULE = "The first line of every report is exactly:"
 HEADINGS = [
     "## Who you are",
@@ -50,7 +51,7 @@ def role_md(title, stamp=None, ban=True, headings=None):
     for h in headings:
         parts += [h, "", "Text.", ""]
         if h == "## Rules" and ban:
-            parts += [f"- {BAN} Only the lead dispatches agents.", ""]
+            parts += [f"- {BAN}", "  Only the lead dispatches agents.", ""]
         if h == "## Report" and stamp:
             parts += [STAMP_RULE, "", stamp, ""]
     return "\n".join(parts)
@@ -149,7 +150,14 @@ class ValidatorTest(unittest.TestCase):
     def executor_role(self, old, new):
         text = role_md("Executor", "ROLE: executor")
         self.assertIn(old, text)
-        self.fx.write("executor/ROLE.md", text.replace(old, new))
+        text = text.replace(old, new, 1)
+        self.fx.write("executor/ROLE.md", text)
+        return text
+
+    def assertLineError(self, text, line, fragment, errors=None, rel="executor/ROLE.md"):
+        """Assert an error for the first line of `text` equal to `line`, naming file and line."""
+        n = text.splitlines().index(line) + 1
+        return self.assertError(f"{rel}:{n}: {fragment}", errors)
 
     # --- baseline ---------------------------------------------------------
 
@@ -361,11 +369,6 @@ class ValidatorTest(unittest.TestCase):
         self.executor_role("## Rules\n", "## Rules\n\n###### Detail\n")
         self.assertError("executor/ROLE.md: headings must be exactly")
 
-    def test_setext_headings_in_role_md_rejected(self):
-        for underline in ("=====", "-----"):
-            with self.subTest(underline):
-                self.executor_role("## Rules\n", f"## Rules\n\nDetail\n{underline}\n")
-                self.assertError("executor/ROLE.md: headings must be exactly")
 
     def test_thematic_break_is_not_a_heading(self):
         self.executor_role("## Rules\n", "## Rules\n\n---\n")
@@ -374,7 +377,7 @@ class ValidatorTest(unittest.TestCase):
     def test_code_fence_contents_are_not_headings(self):
         self.executor_role(
             "## Rules\n",
-            "## Rules\n\n```markdown\n# not a heading\n## nor this\nNor\n===\n```\n\n"
+            "## Rules\n\n```markdown\n# not a heading\n## nor this\n    indented code\n```\n\n"
             "~~~\n### nor this\n~~~\n",
         )
         self.assertEqual(self.fx.errors(), [])
@@ -440,13 +443,22 @@ class ValidatorTest(unittest.TestCase):
 
     def test_stamp_without_first_line_instruction_rejected(self):
         self.executor_role(STAMP_RULE, "Use this stamp:")
-        self.assertError(f"executor/ROLE.md: the Report section must state {STAMP_RULE!r}")
+        self.assertError(f"executor/ROLE.md: the Report section must contain the line {STAMP_RULE!r}")
 
     # --- non-lead rules: agent ban ----------------------------------------
 
     def test_canonical_ban_sentence_accepted(self):
-        self.executor_role(f"- {BAN} Only the lead dispatches agents.", BAN)
-        self.assertEqual(self.fx.errors(), [])
+        for line in (BAN, f"- {BAN}", f"1. {BAN}", f"12. {BAN}"):
+            with self.subTest(line):
+                self.executor_role(f"- {BAN}", line)
+                self.assertEqual(self.fx.errors(), [])
+
+    def test_ban_must_be_the_whole_line(self):
+        for line in (f"- {BAN} Only the lead dispatches agents.", f"* {BAN}", f"  - {BAN}",
+                     f"-  {BAN}", f"1) {BAN}", f"{BAN} ", f"Rule: {BAN}"):
+            with self.subTest(line):
+                self.executor_role(f"- {BAN}", line)
+                self.assertError("executor/ROLE.md: missing the agent-ban sentence")
 
     def test_missing_agent_ban(self):
         self.fx.write("reviewer/ROLE.md", role_md("Reviewer", "ROLE: reviewer", ban=False))
@@ -474,69 +486,156 @@ class ValidatorTest(unittest.TestCase):
         self.executor_role(f"- {BAN}", f"```\n{BAN}\n```")
         self.assertError("executor/ROLE.md: missing the agent-ban sentence")
 
-    # --- E5: comments, code, quotes, indentation --------------------------
+    # --- V1: strict form of ROLE.md ----------------------------------------
 
-    def test_ban_inside_multiline_comment_rejected(self):
-        self.executor_role(f"- {BAN}", f"<!--\n- {BAN}\n-->")
-        self.assertError("executor/ROLE.md: missing the agent-ban sentence")
+    def test_html_comment_rejected(self):
+        for form, line in (("<!-- note -->", "<!-- note -->"),
+                           ("<!--\nhidden\n-->", "<!--"),
+                           ("Text <!-- inline --> text.", "Text <!-- inline --> text."),
+                           ("```\n<!-- in a fence -->\n```", "<!-- in a fence -->")):
+            with self.subTest(form):
+                text = self.executor_role("## Rules\n", f"## Rules\n\n{form}\n")
+                self.assertLineError(text, line, "an HTML comment ('<!--') is not allowed in a ROLE.md")
 
-    def test_stamp_inside_comment_rejected(self):
-        self.executor_role("\nROLE: executor\n", "\n<!--\nROLE: executor\n-->\n")
-        self.assertError("executor/ROLE.md: the Report section must contain a line consisting of exactly 'ROLE: executor'")
+    def test_comment_around_required_lines_rejected(self):
+        for old in (f"- {BAN}", STAMP_RULE, "\nROLE: executor\n"):
+            with self.subTest(old):
+                text = self.executor_role(old, f"<!--\n{old}\n-->")
+                self.assertLineError(text, "<!--", "an HTML comment")
 
-    def test_stamp_rule_inside_comment_rejected(self):
-        self.executor_role(STAMP_RULE, f"<!-- {STAMP_RULE} -->")
-        self.assertError(f"executor/ROLE.md: the Report section must state {STAMP_RULE!r}")
+    def test_block_quoted_line_rejected(self):
+        for line in ("> Quoted", "   > Quoted", ">## Extra", "> ## Extra", "> > ### Extra", ">"):
+            with self.subTest(line):
+                text = self.executor_role("## Rules\n", f"## Rules\n\n{line}\n")
+                self.assertLineError(text, line, "a block-quoted line ('>') is not allowed in a ROLE.md")
 
-    def test_heading_inside_comment_is_not_a_heading(self):
-        for comment in ("<!--\n## Extra\n-->", "<!-- start\n# Extra\nExtra\n=====\nend -->"):
-            with self.subTest(comment):
-                self.executor_role("## Rules\n", f"## Rules\n\n{comment}\n")
+    def test_quote_then_tab_then_heading(self):
+        line = ">\t## Additional heading"
+        text = self.executor_role("## Rules\n", f"## Rules\n\n{line}\n")
+        errors = self.assertLineError(text, line, "a block-quoted line")
+        self.assertLineError(text, line, "a tab character is not allowed in a ROLE.md", errors)
+
+    def test_quoted_paragraph_continuing_onto_required_line(self):
+        # Without a blank line, the next line would continue the quoted paragraph.
+        for old in (f"- {BAN}", STAMP_RULE, "ROLE: executor"):
+            with self.subTest(old):
+                text = self.executor_role(f"\n{old}\n", f"\n> Quoted paragraph\n{old}\n")
+                self.assertLineError(text, "> Quoted paragraph", "a block-quoted line")
+
+    def test_block_quoted_required_lines_rejected(self):
+        for old in (f"- {BAN}", STAMP_RULE, "ROLE: executor"):
+            with self.subTest(old):
+                text = self.executor_role(f"\n{old}\n", f"\n> {old}\n")
+                self.assertLineError(text, f"> {old}", "a block-quoted line")
+
+    def test_setext_underline_rejected(self):
+        message = "a setext heading underline is not allowed in a ROLE.md"
+        for form, line in (("Detail\n=====", "====="), ("Detail\n-----", "-----"),
+                           ("Detail\n---", "---"), ("Detail\n--", "--"), ("Detail\n  ---  ", "  ---  "),
+                           ("\n===", "==="), ("```\nNor\n===\n```", "===")):
+            with self.subTest(form):
+                text = self.executor_role("## Rules\n", f"## Rules\n\n{form}\n")
+                self.assertLineError(text, line, message)
+
+    def test_two_line_setext_title(self):
+        text = self.executor_role("## Report\n", "Draft\nReport\n------\n")
+        errors = self.assertLineError(text, "------", "a setext heading underline")
+        self.assertError("executor/ROLE.md: headings must be exactly", errors)
+
+    def test_space_tab_text_then_rule(self):
+        line = " \tText"
+        text = self.executor_role("## Rules\n", f"## Rules\n\n{line}\n---\n")
+        errors = self.assertLineError(text, line, "a tab character")
+        self.assertLineError(text, "---", "a setext heading underline", errors)
+
+    def test_thematic_break_after_blank_line_accepted(self):
+        for rule in ("---", "-----", "***", "- - -"):
+            with self.subTest(rule):
+                self.executor_role("## Rules\n", f"## Rules\n\n{rule}\n")
                 self.assertEqual(self.fx.errors(), [])
 
-    def test_unclosed_comment_hides_the_rest(self):
-        self.executor_role(f"- {BAN}", f"<!-- unclosed\n- {BAN}")
-        self.assertError("executor/ROLE.md: missing the agent-ban sentence")
+    def test_tab_rejected_anywhere(self):
+        for form, line in (("Text\twith a tab.", "Text\twith a tab."), ("\tIndented.", "\tIndented."),
+                           ("```\n\tcode\n```", "\tcode")):
+            with self.subTest(form):
+                text = self.executor_role("## Rules\n", f"## Rules\n\n{form}\n")
+                self.assertLineError(text, line, "a tab character is not allowed in a ROLE.md")
 
-    def test_forbidden_word_inside_comment_still_reported(self):
-        self.fx.write("shared/reporting.md", "# Reporting\n\n<!-- Use T3. -->\n")
-        self.assertError("shared/reporting.md:3: forbidden word 'T3'")
+    def test_indented_line_outside_fence_rejected(self):
+        message = "a line indented by four or more spaces outside fenced code is not allowed in a ROLE.md"
+        for line in ("    Indented code.", "        Deeper.", "    ```"):
+            with self.subTest(line):
+                text = self.executor_role("## Rules\n", f"## Rules\n\n{line}\n")
+                self.assertLineError(text, line, message)
+
+    def test_indented_lines_inside_fence_and_blank_lines_accepted(self):
+        self.executor_role("## Rules\n", "## Rules\n\n```\n    code\n```\n\n    \n   Three spaces.\n")
+        self.assertEqual(self.fx.errors(), [])
 
     def test_indented_ban_rejected(self):
-        for indent in ("    ", "\t"):
-            with self.subTest(repr(indent)):
-                self.executor_role(f"- {BAN}", f"{indent}{BAN}")
-                self.assertError("executor/ROLE.md: missing the agent-ban sentence")
-
-    def test_block_quoted_ban_rejected(self):
-        self.executor_role(f"- {BAN}", f"> {BAN}")
-        self.assertError("executor/ROLE.md: missing the agent-ban sentence")
+        line = f"    {BAN}"
+        text = self.executor_role(f"- {BAN}", line)
+        errors = self.assertLineError(text, line, "a line indented by four or more spaces")
+        self.assertError("executor/ROLE.md: missing the agent-ban sentence", errors)
 
     def test_stamp_inside_code_fence_rejected(self):
         self.executor_role("\nROLE: executor\n", "\n```\nROLE: executor\n```\n")
         self.assertError("executor/ROLE.md: the Report section must contain a line consisting of exactly 'ROLE: executor'")
 
-    def test_indented_or_quoted_stamp_rejected(self):
-        for line in ("    ROLE: executor", "\tROLE: executor", "> ROLE: executor"):
-            with self.subTest(line):
+    def test_stamp_with_surrounding_whitespace_rejected(self):
+        for line in (" ROLE: executor", "  ROLE: executor", "   ROLE: executor",
+                     "ROLE: executor ", "ROLE: executor\t"):
+            with self.subTest(repr(line)):
                 self.executor_role("\nROLE: executor\n", f"\n{line}\n")
-                self.assertError("executor/ROLE.md: the Report section must contain a line consisting of exactly 'ROLE: executor'")
+                self.assertError(
+                    "executor/ROLE.md: the Report section must contain a line consisting of exactly 'ROLE: executor'"
+                )
 
-    def test_stamp_rule_in_code_indented_or_quoted_rejected(self):
-        for form in (f"```\n{STAMP_RULE}\n```", f"    {STAMP_RULE}", f"> {STAMP_RULE}"):
+    def test_first_line_instruction_must_be_one_exact_line(self):
+        for form in (f"T{STAMP_RULE}", f"Follow the format. {STAMP_RULE}", f"- {STAMP_RULE}",
+                     f" {STAMP_RULE}", f"{STAMP_RULE} ", "The first line of every\nreport is exactly:"):
             with self.subTest(form):
                 self.executor_role(STAMP_RULE, form)
-                self.assertError(f"executor/ROLE.md: the Report section must state {STAMP_RULE!r}")
+                self.assertError(f"executor/ROLE.md: the Report section must contain the line {STAMP_RULE!r}")
 
-    def test_block_quoted_heading_counts_in_role_md(self):
-        for quoted in ("> ## Extra", ">## Extra", "> Extra\n> =====", "> > ### Extra"):
-            with self.subTest(quoted):
-                self.executor_role("## Rules\n", f"## Rules\n\n{quoted}\n")
-                self.assertError("executor/ROLE.md: headings must be exactly")
+    def test_first_line_instruction_inside_fence_rejected(self):
+        self.executor_role(STAMP_RULE, f"```\n{STAMP_RULE}\n```")
+        self.assertError(f"executor/ROLE.md: the Report section must contain the line {STAMP_RULE!r}")
 
-    def test_block_quote_line_then_rule_is_not_a_setext_heading(self):
-        self.executor_role("## Rules\n", "## Rules\n\n> Quoted\n\n---\n")
+    def test_first_line_instruction_must_be_followed_by_stamp(self):
+        text = self.executor_role(f"{STAMP_RULE}\n\nROLE: executor", f"{STAMP_RULE}\n\nText.\n\nROLE: executor")
+        self.assertLineError(
+            text, STAMP_RULE, f"the line {STAMP_RULE!r} must be followed (blank lines allowed) by the stamp line"
+        )
+
+    def test_first_line_instruction_then_stamp_with_or_without_blank_lines(self):
+        for gap in ("\n", "\n\n", "\n\n\n\n"):
+            with self.subTest(repr(gap)):
+                self.executor_role(f"{STAMP_RULE}\n\nROLE: executor", f"{STAMP_RULE}{gap}ROLE: executor")
+                self.assertEqual(self.fx.errors(), [])
+
+    def test_first_line_instruction_outside_report_rejected(self):
+        text = role_md("Executor", stamp=None).replace(
+            "## You must not\n", f"{STAMP_RULE}\n\nROLE: executor\n\n## You must not\n"
+        )
+        self.fx.write("executor/ROLE.md", text)
+        errors = self.assertError(f"executor/ROLE.md: the Report section must contain the line {STAMP_RULE!r}")
+        self.assertError("the Report section must contain a line consisting of exactly 'ROLE: executor'", errors)
+
+    def test_strict_form_applies_to_lead_role_md(self):
+        text = role_md("Lead", ban=False).replace("## Rules\n", "## Rules\n\n> Quoted\n")
+        self.fx.write("lead/ROLE.md", text)
+        self.assertLineError(text, "> Quoted", "a block-quoted line", rel="lead/ROLE.md")
+
+    def test_strict_form_does_not_apply_to_skills_and_shared_files(self):
+        body = "\n> Quoted\n\n<!-- comment -->\n\n\tTabbed\n\n    Indented\n\nTitle\n=====\n"
+        self.fx.write("lead/skills/a.md", "# Skill A\n" + body)
+        self.fx.write("shared/reporting.md", "# Reporting\n" + body)
         self.assertEqual(self.fx.errors(), [])
+
+    def test_forbidden_word_inside_comment_still_reported(self):
+        self.fx.write("shared/reporting.md", "# Reporting\n\n<!-- Use T3. -->\n")
+        self.assertError("shared/reporting.md:3: forbidden word 'T3'")
 
     # --- E5: discovery, paths, model-set fields ----------------------------
 
@@ -739,6 +838,11 @@ class RepositoryTest(unittest.TestCase):
         readme = (REPO / "README.md").read_text(encoding="utf-8")
         self.assertIn(BAN, " ".join(readme.split()))
         self.assertEqual(check.AGENT_BAN, BAN)
+
+    def test_readme_documents_the_first_line_instruction(self):
+        readme = (REPO / "README.md").read_text(encoding="utf-8")
+        self.assertIn(STAMP_RULE, readme)
+        self.assertEqual(check.FIRST_LINE_RULE, STAMP_RULE)
 
 
 if __name__ == "__main__":
