@@ -7,8 +7,10 @@ Usage:
     python3 scripts/check.py --root DIR ...  # operate on another tree (tests)
 
 The validator is generic: it knows the lead role and the shared folder by
-name, and nothing else about which roles a team has. It is line-based, not a
-Markdown parser; see "Limits of the check" in the README.
+name, and nothing else about which roles a team has. It does not interpret
+Markdown: it requires every ROLE.md to avoid the constructs that would need
+interpreting (see STRICT_FORM) and then compares whole lines; see "Limits of
+the check" in the README.
 
 Standard library only; Python 3.10+.
 """
@@ -39,16 +41,16 @@ REQUIRED_H2 = [
 ]
 REPORT_SECTION = "Report"
 
-# Every non-lead ROLE.md contains this exact sentence on a plain line (see
-# plain_lines), at the start of the line (optionally after a list marker) and
-# followed by nothing but the end of the line or the next sentence.
+# Every non-lead ROLE.md has, outside fenced code, a line that is exactly this
+# sentence, optionally after a "- " or "N. " list marker.
 AGENT_BAN = (
     "You never start, spawn, schedule or delegate to other agents, sub-agents, "
     "threads, workflows or new machines, even when a tool or a built-in skill offers it."
 )
-# The Report section of every non-lead ROLE.md states this, and contains a
-# line consisting of exactly the role's stamp, both on plain lines.
-STAMP_RULE = "The first line of every report is exactly:"
+# The Report section of every non-lead ROLE.md has, outside fenced code, a line
+# that is exactly this sentence, followed (blank lines allowed) by a line that
+# is exactly the role's stamp.
+FIRST_LINE_RULE = "The first line of every report is exactly:"
 
 # Launcher-specific words that must not appear in role or skill texts
 # (whole words, case-sensitive).
@@ -64,13 +66,22 @@ ATX = re.compile(r"^ {0,3}(#{1,6})(?=[ \t]|$)(.*)$")
 ATX_CLOSE = re.compile(r"(^|[ \t])#+$")
 FENCE_OPEN = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 FENCE_CLOSE = re.compile(r"^ {0,3}(`{3,}|~{3,})[ \t]*$")
-SETEXT = re.compile(r"^ {0,3}(=+|-+)[ \t]*$")
-NOT_PARAGRAPH = re.compile(
-    r"^ {0,3}(?:[-*+](?:[ \t]|$)|\d{1,9}[.)](?:[ \t]|$)|>|<|([-*_])(?:[ \t]*\1){2,}[ \t]*$)"
-)
-LIST_MARKER = r"(?:(?:[-*+]|\d{1,9}[.)]) )?"
-COMMENT = re.compile(r"<!--.*?(?:-->|\Z)", re.DOTALL)
-QUOTE = re.compile(r"^ {0,3}>[ ]?")
+BAN_LINE = re.compile(r"^(?:- |\d{1,9}\. )?" + re.escape(AGENT_BAN) + r"$")
+QUOTED = re.compile(r"^ *>")
+UNDERLINE = re.compile(r"^ *(=+|-+) *$")
+
+# V1: constructs that are errors in every ROLE.md, so the remaining checks can
+# be plain line comparisons. Each yields one error per offending line.
+STRICT_FORM = {
+    "comment": "an HTML comment ('<!--') is not allowed in a ROLE.md",
+    "quote": "a block-quoted line ('>') is not allowed in a ROLE.md",
+    "setext": (
+        "a setext heading underline is not allowed in a ROLE.md "
+        "(a line of only '=', or of only '-' after a non-blank line)"
+    ),
+    "tab": "a tab character is not allowed in a ROLE.md",
+    "indent": "a line indented by four or more spaces outside fenced code is not allowed in a ROLE.md",
+}
 
 
 def is_int(value) -> bool:
@@ -283,28 +294,29 @@ class Team:
 
 
 def scan(text: str):
-    """Yield (kind, line) for each line: kind is 'fence', 'code' or 'text'.
+    """Yield (line number, kind, line) for each line: kind is 'fence' (an
+    opening or closing fence line), 'code' (inside a fence) or 'text'.
 
     A fence opens with three or more backticks or tildes and closes only with
     a line of the same character, at least as long, and nothing else. A
     backtick opener whose rest contains a backtick is inline code, not a fence.
     """
     fence: tuple[str, int] | None = None
-    for line in text.splitlines():
+    for n, line in enumerate(text.splitlines(), 1):
         if fence:
             m = FENCE_CLOSE.match(line)
             if m and m.group(1)[0] == fence[0] and len(m.group(1)) >= fence[1]:
                 fence = None
-                yield "fence", line
+                yield n, "fence", line
             else:
-                yield "code", line
+                yield n, "code", line
             continue
         m = FENCE_OPEN.match(line)
         if m and not (m.group(1)[0] == "`" and "`" in m.group(2)):
             fence = (m.group(1)[0], len(m.group(1)))
-            yield "fence", line
+            yield n, "fence", line
             continue
-        yield "text", line
+        yield n, "text", line
 
 
 def atx(line: str) -> tuple[int, str] | None:
@@ -315,64 +327,27 @@ def atx(line: str) -> tuple[int, str] | None:
     return len(m.group(1)), title
 
 
-def strip_comments(text: str) -> str:
-    """Remove HTML comments, keeping their line breaks so line numbers hold.
-    An unclosed comment runs to the end of the file."""
-    return COMMENT.sub(lambda m: "\n" * m.group(0).count("\n"), text)
-
-
-def unquote(line: str) -> tuple[int, str]:
-    """Return the block-quote depth of a line and the line without its markers."""
-    depth = 0
-    while True:
-        m = QUOTE.match(line)
-        if not m:
-            return depth, line
-        depth += 1
-        line = line[m.end():]
-
-
-def is_plain(line: str) -> bool:
-    """A line that is not indented code and not block-quoted."""
-    indent = line[: len(line) - len(line.lstrip(" \t"))]
-    return "\t" not in indent and len(indent) < 4 and not QUOTE.match(line)
-
-
-def is_paragraph_line(line: str) -> bool:
-    if not line.strip() or line.startswith("    ") or line.startswith("\t"):
-        return False
-    return not NOT_PARAGRAPH.match(line) and atx(line) is None
-
-
-def parse(text: str) -> tuple[list[tuple[int, str]], list[tuple[str | None, str, str]]]:
-    """Return every heading (ATX of any level and setext, also inside block
-    quotes) outside code and comments, and every line as (current level-1/2
-    section title, kind, line), where kind is 'fence', 'code', 'text' or
-    'plain' (a text line that is neither indented code nor block-quoted)."""
-    found: list[tuple[int, str]] = []
-    body: list[tuple[str | None, str, str]] = []
-    section: str | None = None
-    prev: tuple[int, str] | None = None
-    for kind, line in scan(strip_comments(text)):
-        heading = None
-        if kind == "text":
-            depth, rest = unquote(line)
-            heading = atx(rest)
-            m = SETEXT.match(rest)
-            if heading is None and m and prev is not None and prev[0] == depth:
-                heading = (1 if m.group(1)[0] == "=" else 2, prev[1].strip())
-            prev = (depth, rest) if heading is None and is_paragraph_line(rest) else None
-            if is_plain(line):
-                kind = "plain"
-        else:
-            prev = None
-        if heading:
-            found.append(heading)
-            if heading[0] <= 2:
-                section = heading[1]
-            continue
-        body.append((section, kind, line))
-    return found, body
+def strict_form_errors(rel: str, lines: list[tuple[int, str, str]]) -> list[str]:
+    """The V1 errors: comments, quotes, setext underlines and tabs anywhere;
+    four-space indentation outside fenced code."""
+    errors = []
+    prev_blank = True
+    for n, kind, line in lines:
+        found = []
+        if "<!--" in line:
+            found.append("comment")
+        if QUOTED.match(line):
+            found.append("quote")
+        m = UNDERLINE.match(line)
+        if m and (m.group(1)[0] == "=" or not prev_blank):
+            found.append("setext")
+        if "\t" in line:
+            found.append("tab")
+        if kind == "text" and line.startswith("    ") and line.strip():
+            found.append("indent")
+        errors += [f"{rel}:{n}: {STRICT_FORM[key]}" for key in found]
+        prev_blank = not line.strip()
+    return errors
 
 
 def role_title(name: str) -> str:
@@ -380,12 +355,23 @@ def role_title(name: str) -> str:
 
 
 def check_role_md(name: str, rel: str, text: str) -> list[str]:
-    errors = []
-    found, body = parse(text)
+    lines = list(scan(text))
+    errors = strict_form_errors(rel, lines)
+
+    headings: list[tuple[int, str]] = []
+    sections: list[str | None] = []  # the level-1/2 section each line is in
+    section: str | None = None
+    for _, kind, line in lines:
+        heading = atx(line) if kind == "text" else None
+        if heading:
+            headings.append(heading)
+            if heading[0] <= 2:
+                section = heading[1]
+        sections.append(section)
     expected = [(1, role_title(name))] + [(2, h) for h in REQUIRED_H2]
-    if found != expected:
+    if headings != expected:
         want = ", ".join("#" * lvl + " " + t for lvl, t in expected)
-        got = ", ".join("#" * lvl + " " + t for lvl, t in found) or "none"
+        got = ", ".join("#" * lvl + " " + t for lvl, t in headings) or "none"
         errors.append(
             f"{rel}: headings must be exactly [{want}] in this order, with no other headings; "
             f"found [{got}]"
@@ -393,30 +379,38 @@ def check_role_md(name: str, rel: str, text: str) -> list[str]:
     if name == LEAD:
         return errors
 
-    ban = re.compile("^" + LIST_MARKER + re.escape(AGENT_BAN) + "(?: |$)")
-    if not any(kind == "plain" and ban.match(" ".join(line.split())) for _, kind, line in body):
+    if not any(kind == "text" and BAN_LINE.match(line) for _, kind, line in lines):
         errors.append(
-            f"{rel}: missing the agent-ban sentence; a plain line (not in a comment, code or block quote) "
-            f"must start (after an optional list marker) with exactly: {AGENT_BAN!r}"
+            f"{rel}: missing the agent-ban sentence: outside fenced code, one line must be exactly "
+            f"{AGENT_BAN!r}, optionally after a '- ' or 'N. ' list marker"
         )
     stamp = f"ROLE: {name}"
-    report = [(kind, line) for sec, kind, line in body if sec == REPORT_SECTION]
-    if not any(kind == "plain" and line.strip() == stamp for kind, line in report):
+    report = [(i, kind, line) for i, (_, kind, line) in enumerate(lines) if sections[i] == REPORT_SECTION]
+    if not any(kind == "text" and line == stamp for _, kind, line in report):
         errors.append(
             f"{rel}: the {REPORT_SECTION} section must contain a line consisting of exactly {stamp!r}, "
-            f"not in a comment, code or block quote"
+            f"outside fenced code"
         )
-    # The instruction may wrap across consecutive plain lines of one paragraph.
-    paragraphs, current = [], []
-    for kind, line in report + [("end", "")]:
-        if kind == "plain" and line.strip():
-            current.append(line)
-        else:
-            paragraphs.append(" ".join(" ".join(current).split()))
-            current = []
-    if not any(STAMP_RULE in p for p in paragraphs):
-        errors.append(f"{rel}: the {REPORT_SECTION} section must state {STAMP_RULE!r}")
+    rules = [i for i, kind, line in report if kind == "text" and line == FIRST_LINE_RULE]
+    if not rules:
+        errors.append(
+            f"{rel}: the {REPORT_SECTION} section must contain the line {FIRST_LINE_RULE!r}, "
+            f"exactly and on one line, outside fenced code"
+        )
+    elif not any(followed_by(lines, i, stamp) for i in rules):
+        errors.append(
+            f"{rel}:{lines[rules[0]][0]}: the line {FIRST_LINE_RULE!r} must be followed "
+            f"(blank lines allowed) by the stamp line {stamp!r}"
+        )
     return errors
+
+
+def followed_by(lines: list[tuple[int, str, str]], i: int, wanted: str) -> bool:
+    """True if the next non-blank line after lines[i] is a text line equal to `wanted`."""
+    for _, kind, line in lines[i + 1:]:
+        if line.strip():
+            return kind == "text" and line == wanted
+    return False
 
 
 def check_forbidden(rel: str, text: str) -> list[str]:
