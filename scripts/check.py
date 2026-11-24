@@ -6,6 +6,9 @@ Usage:
     python3 scripts/check.py --print ROLE    # print ROLE's assembled bundle
     python3 scripts/check.py --root DIR ...  # operate on another tree (tests)
 
+The validator is generic: it knows the lead role and the shared folder by
+name, and nothing else about which roles a team has.
+
 Standard library only; Python 3.10+.
 """
 
@@ -21,6 +24,9 @@ SCHEMA_VERSION = 1
 LEAD = "lead"
 SHARED = "shared"
 TEAM_FILE = "team.json"
+MODELS_DIR = "models"
+ROLE_FILE = "ROLE.md"
+MARKDOWN_SUFFIXES = {".md", ".markdown"}
 
 REQUIRED_H2 = [
     "Who you are",
@@ -30,28 +36,84 @@ REQUIRED_H2 = [
     "You must not",
     "Report",
 ]
+REPORT_SECTION = "Report"
 
-# Every non-lead ROLE.md must contain this sentence (whitespace-insensitive).
-AGENT_BAN = "You never start, spawn, schedule or delegate to other agents"
+# Every non-lead ROLE.md contains this exact sentence, outside code, at the
+# start of a line (optionally after a list marker) and followed by nothing
+# but the end of the line or the next sentence.
+AGENT_BAN = (
+    "You never start, spawn, schedule or delegate to other agents, sub-agents, "
+    "threads, workflows or new machines, even when a tool or a built-in skill offers it."
+)
+# The Report section of every non-lead ROLE.md states this, and contains a
+# line consisting of exactly the role's stamp.
+STAMP_RULE = "The first line of every report is exactly:"
 
-# Launcher-specific words that must not appear in role or skill texts.
-FORBIDDEN = re.compile(r"\b(Boat|T3|VMs|VM)\b", re.IGNORECASE)
+# Launcher-specific words that must not appear in role or skill texts
+# (whole words, case-sensitive).
+FORBIDDEN = re.compile(r"\b(Boat|T3|VMs|VM)\b")
 
 PROVIDERS = {"codex", "claude"}
 EFFORTS = {"minimal", "low", "medium", "high", "xhigh", "max"}
 MODEL_KEYS = {"provider", "family", "effort"}
 ROLE_NAME = re.compile(r"^[a-z][a-z0-9-]*$")
-HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
-FENCE = re.compile(r"^\s*(```|~~~)")
+
+ATX = re.compile(r"^ {0,3}(#{1,6})(?=[ \t]|$)(.*)$")
+ATX_CLOSE = re.compile(r"(^|[ \t])#+$")
+FENCE_OPEN = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
+FENCE_CLOSE = re.compile(r"^ {0,3}(`{3,}|~{3,})[ \t]*$")
+SETEXT = re.compile(r"^ {0,3}(=+|-+)[ \t]*$")
+NOT_PARAGRAPH = re.compile(
+    r"^ {0,3}(?:[-*+](?:[ \t]|$)|\d{1,9}[.)](?:[ \t]|$)|>|<|([-*_])(?:[ \t]*\1){2,}[ \t]*$)"
+)
+LIST_MARKER = r"(?:(?:[-*+]|\d{1,9}[.)]) )?"
+
+
+def is_int(value) -> bool:
+    """True for a JSON integer; JSON true/false are not integers here."""
+    return type(value) is int
+
+
+def is_name(value) -> bool:
+    return isinstance(value, str) and bool(value.strip())
+
+
+def safe_rel(rel) -> bool:
+    if not isinstance(rel, str) or not rel or "\\" in rel:
+        return False
+    p = PurePosixPath(rel)
+    return not p.is_absolute() and ".." not in p.parts
+
+
+def read_text(path: Path, rel: str, errors: list[str]) -> str | None:
+    try:
+        return path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        errors.append(f"{rel}: not valid UTF-8")
+    except OSError as exc:
+        errors.append(f"{rel}: cannot be read: {exc.strerror or exc}")
+    return None
+
+
+def is_markdown(path: Path) -> bool:
+    return path.is_file() and path.suffix.lower() in MARKDOWN_SUFFIXES
 
 
 class Team:
-    """Parsed team.json plus the errors found while parsing it."""
+    """Parsed team.json plus the errors found while parsing it.
+
+    `declared` holds every role name in `roles`; `bundles` every bundle that
+    is a list (its string entries), even when the role has other errors, so
+    one wrong field does not turn a role's files into orphans; `roles` only
+    the roles whose description is fully valid.
+    """
 
     def __init__(self, root: Path):
         self.root = root
         self.errors: list[str] = []
         self.data: dict = {}
+        self.declared: list[str] = []
+        self.bundles: dict[str, list[str]] = {}
         self.roles: dict[str, dict] = {}
         self.loaded = False
         self._load()
@@ -64,8 +126,11 @@ class Team:
         if not path.is_file():
             self._err("file not found")
             return
+        text = read_text(path, TEAM_FILE, self.errors)
+        if text is None:
+            return
         try:
-            data = json.loads(path.read_text(encoding="utf-8"))
+            data = json.loads(text)
         except json.JSONDecodeError as exc:
             self._err(f"invalid JSON: {exc}")
             return
@@ -75,10 +140,11 @@ class Team:
         self.data = data
         self.loaded = True
 
-        if data.get("schema") != SCHEMA_VERSION:
-            self._err(f"schema must be {SCHEMA_VERSION}, got {data.get('schema')!r}")
+        schema = data.get("schema")
+        if not (is_int(schema) and schema == SCHEMA_VERSION):
+            self._err(f"schema must be {SCHEMA_VERSION}, got {schema!r}")
         for key in ("name", "version"):
-            if not isinstance(data.get(key), str) or not data[key].strip():
+            if not is_name(data.get(key)):
                 self._err(f"{key} must be a non-empty string")
         known = {"schema", "name", "version", "roles", "model_rules", "model_sets"}
         for key in sorted(set(data) - known):
@@ -88,6 +154,7 @@ class Team:
         if not isinstance(roles, dict) or not roles:
             self._err("roles must be a non-empty object")
             roles = {}
+        self.declared = list(roles)
         if roles and LEAD not in roles:
             self._err(f"roles must include {LEAD!r}")
         for name, spec in roles.items():
@@ -100,7 +167,7 @@ class Team:
             self._err("model_sets must be a non-empty object")
         else:
             for set_name, rel in sets.items():
-                if not isinstance(rel, str) or not safe_rel(rel):
+                if not safe_rel(rel):
                     self._err(f"model_sets.{set_name} must be a relative path inside the repository")
 
     def _check_role(self, name: str, spec) -> bool:
@@ -118,14 +185,16 @@ class Team:
             self._err(f"{where}.stamp must be 'ROLE: {name}', got {spec.get('stamp')!r}")
             ok = False
         inst = spec.get("instances")
-        if not isinstance(inst, int) or isinstance(inst, bool) or inst < 1:
+        if not is_int(inst) or inst < 1:
             self._err(f"{where}.instances must be a positive integer, got {inst!r}")
             ok = False
         bundle = spec.get("bundle")
+        if isinstance(bundle, list):
+            self.bundles[name] = [b for b in bundle if isinstance(b, str)]
         if not isinstance(bundle, list) or not bundle or not all(isinstance(b, str) for b in bundle):
             self._err(f"{where}.bundle must be a non-empty list of paths")
             return False
-        first = f"{name}/ROLE.md"
+        first = f"{name}/{ROLE_FILE}"
         if bundle[0] != first:
             self._err(f"{where}.bundle must start with {first}, got {bundle[0]!r}")
             ok = False
@@ -156,21 +225,27 @@ class Team:
         if not isinstance(rules, list):
             self._err("model_rules must be a list")
             return
-        names = set(self.data.get("roles") or {})
+        names = set(self.declared)
         for i, rule in enumerate(rules, 1):
             where = f"model_rules[{i}]"
             if not isinstance(rule, dict):
                 self._err(f"{where} must be an object")
                 continue
+            for key in sorted(set(rule) - {"roles", "must_differ_from"}):
+                self._err(f"{where}: unknown key {key!r}")
             roles = rule.get("roles")
             target = rule.get("must_differ_from")
             if not isinstance(roles, list) or not roles:
                 self._err(f"{where}.roles must be a non-empty list")
                 continue
             for r in roles:
-                if r not in names:
+                if not isinstance(r, str):
+                    self._err(f"{where}.roles: each entry must be a role name, got {r!r}")
+                elif r not in names:
                     self._err(f"{where}.roles: unknown role {r!r}")
-            if target not in names:
+            if not isinstance(target, str):
+                self._err(f"{where}.must_differ_from must be a role name, got {target!r}")
+            elif target not in names:
                 self._err(f"{where}.must_differ_from: unknown role {target!r}")
             elif target in roles:
                 self._err(f"{where}: a role cannot be required to differ from itself")
@@ -179,60 +254,119 @@ class Team:
         rules = self.data.get("model_rules")
         if not isinstance(rules, list):
             return []
-        return [r for r in rules if isinstance(r, dict) and isinstance(r.get("roles"), list)]
+        return [
+            r for r in rules
+            if isinstance(r, dict)
+            and isinstance(r.get("roles"), list)
+            and all(isinstance(x, str) for x in r["roles"])
+            and isinstance(r.get("must_differ_from"), str)
+        ]
 
     def model_sets(self) -> dict[str, str]:
         sets = self.data.get("model_sets")
         if not isinstance(sets, dict):
             return {}
-        return {k: v for k, v in sets.items() if isinstance(v, str) and safe_rel(v)}
+        return {k: v for k, v in sets.items() if safe_rel(v)}
 
 
-def safe_rel(rel: str) -> bool:
-    p = PurePosixPath(rel)
-    return bool(rel) and not p.is_absolute() and ".." not in p.parts and "\\" not in rel
+def scan(text: str):
+    """Yield (kind, line) for each line: kind is 'fence', 'code' or 'text'.
 
-
-def read(root: Path, rel: str) -> str:
-    return (root / rel).read_text(encoding="utf-8")
-
-
-def headings(text: str) -> list[tuple[int, str]]:
-    """Return (level, title) for every ATX heading outside fenced code."""
-    out = []
-    in_fence = False
+    A fence opens with three or more backticks or tildes and closes only with
+    a line of the same character, at least as long, and nothing else. A
+    backtick opener whose rest contains a backtick is inline code, not a fence.
+    """
+    fence: tuple[str, int] | None = None
     for line in text.splitlines():
-        if FENCE.match(line):
-            in_fence = not in_fence
+        if fence:
+            m = FENCE_CLOSE.match(line)
+            if m and m.group(1)[0] == fence[0] and len(m.group(1)) >= fence[1]:
+                fence = None
+                yield "fence", line
+            else:
+                yield "code", line
             continue
-        if in_fence:
+        m = FENCE_OPEN.match(line)
+        if m and not (m.group(1)[0] == "`" and "`" in m.group(2)):
+            fence = (m.group(1)[0], len(m.group(1)))
+            yield "fence", line
             continue
-        m = HEADING.match(line)
-        if m:
-            out.append((len(m.group(1)), m.group(2)))
-    return out
+        yield "text", line
+
+
+def atx(line: str) -> tuple[int, str] | None:
+    m = ATX.match(line)
+    if not m:
+        return None
+    title = ATX_CLOSE.sub("", m.group(2).strip()).strip()
+    return len(m.group(1)), title
+
+
+def is_paragraph_line(line: str) -> bool:
+    if not line.strip() or line.startswith("    ") or line.startswith("\t"):
+        return False
+    return not NOT_PARAGRAPH.match(line) and atx(line) is None
+
+
+def parse(text: str) -> tuple[list[tuple[int, str]], list[tuple[str | None, str, str]]]:
+    """Return every heading (ATX of any level and setext) outside code, and
+    every line as (current level-1/2 section title, kind, line)."""
+    found: list[tuple[int, str]] = []
+    body: list[tuple[str | None, str, str]] = []
+    section: str | None = None
+    prev: str | None = None
+    for kind, line in scan(text):
+        heading = None
+        if kind == "text":
+            heading = atx(line)
+            m = SETEXT.match(line)
+            if heading is None and m and prev is not None:
+                heading = (1 if m.group(1)[0] == "=" else 2, prev.strip())
+            prev = line if heading is None and is_paragraph_line(line) else None
+        else:
+            prev = None
+        if heading:
+            found.append(heading)
+            if heading[0] <= 2:
+                section = heading[1]
+            continue
+        body.append((section, kind, line))
+    return found, body
 
 
 def role_title(name: str) -> str:
     return name.replace("-", " ").title()
 
 
-def check_role_md(name: str, rel: str, text: str, stamp: str) -> list[str]:
+def check_role_md(name: str, rel: str, text: str) -> list[str]:
     errors = []
-    found = [(lvl, t) for lvl, t in headings(text) if lvl <= 2]
+    found, body = parse(text)
     expected = [(1, role_title(name))] + [(2, h) for h in REQUIRED_H2]
-    norm = [(lvl, t.strip().lower()) for lvl, t in found]
-    if norm != [(lvl, t.lower()) for lvl, t in expected]:
+    if found != expected:
         want = ", ".join("#" * lvl + " " + t for lvl, t in expected)
         got = ", ".join("#" * lvl + " " + t for lvl, t in found) or "none"
-        errors.append(f"{rel}: headings must be exactly [{want}] in this order; found [{got}]")
-    if name != LEAD:
-        flat = " ".join(text.split())
-        if AGENT_BAN not in flat:
-            errors.append(f"{rel}: missing the agent-ban rule (must contain: {AGENT_BAN!r})")
-        lines = {line.strip().strip("`").strip() for line in text.splitlines()}
-        if stamp not in lines:
-            errors.append(f"{rel}: missing a stamp line consisting of exactly {stamp!r}")
+        errors.append(
+            f"{rel}: headings must be exactly [{want}] in this order, with no other headings; "
+            f"found [{got}]"
+        )
+    if name == LEAD:
+        return errors
+
+    ban = re.compile("^" + LIST_MARKER + re.escape(AGENT_BAN) + "(?: |$)")
+    if not any(kind == "text" and ban.match(" ".join(line.split())) for _, kind, line in body):
+        errors.append(
+            f"{rel}: missing the agent-ban sentence; a line must start (after an optional list marker) "
+            f"with exactly: {AGENT_BAN!r}"
+        )
+    stamp = f"ROLE: {name}"
+    report = [(kind, line) for sec, kind, line in body if sec == REPORT_SECTION]
+    if not any(kind != "fence" and line.strip() == stamp for kind, line in report):
+        errors.append(
+            f"{rel}: the {REPORT_SECTION} section must contain a line consisting of exactly {stamp!r}"
+        )
+    prose = " ".join(" ".join(line for kind, line in report if kind == "text").split())
+    if STAMP_RULE not in prose:
+        errors.append(f"{rel}: the {REPORT_SECTION} section must state {STAMP_RULE!r}")
     return errors
 
 
@@ -245,6 +379,7 @@ def check_forbidden(rel: str, text: str) -> list[str]:
 
 
 def instances_of(entry, count: int, where: str, errors: list[str]) -> list[dict] | None:
+    """Validate a role's model entries; return them with families normalised."""
     if count == 1:
         items = [entry] if isinstance(entry, dict) else None
         shape = "an object"
@@ -254,25 +389,28 @@ def instances_of(entry, count: int, where: str, errors: list[str]) -> list[dict]
     if items is None:
         errors.append(f"{where} must be {shape} (instances: {count})")
         return None
-    ok = True
+    out = []
     for i, item in enumerate(items, 1):
         tag = where if count == 1 else f"{where} #{i}"
         if not isinstance(item, dict):
             errors.append(f"{tag} must be an object")
-            ok = False
             continue
+        ok = True
         for key in sorted(set(item) - MODEL_KEYS):
             errors.append(f"{tag}: unknown key {key!r}")
-        if item.get("provider") not in PROVIDERS:
-            errors.append(f"{tag}: provider must be one of {sorted(PROVIDERS)}, got {item.get('provider')!r}")
+        provider, family, effort = item.get("provider"), item.get("family"), item.get("effort")
+        if not isinstance(provider, str) or provider not in PROVIDERS:
+            errors.append(f"{tag}: provider must be one of {sorted(PROVIDERS)}, got {provider!r}")
             ok = False
-        if not isinstance(item.get("family"), str) or not item["family"].strip():
+        if not is_name(family):
             errors.append(f"{tag}: family must be a non-empty string")
             ok = False
-        if item.get("effort") not in EFFORTS:
-            errors.append(f"{tag}: effort must be one of {sorted(EFFORTS)}, got {item.get('effort')!r}")
+        if not isinstance(effort, str) or effort not in EFFORTS:
+            errors.append(f"{tag}: effort must be one of {sorted(EFFORTS)}, got {effort!r}")
             ok = False
-    return items if ok else None
+        if ok:
+            out.append({"provider": provider, "family": family.strip().lower(), "effort": effort})
+    return out if len(out) == len(items) else None
 
 
 def check_model_set(root: Path, team: Team, set_name: str, rel: str) -> list[str]:
@@ -280,14 +418,18 @@ def check_model_set(root: Path, team: Team, set_name: str, rel: str) -> list[str
     path = root / rel
     if not path.is_file():
         return [f"{TEAM_FILE}: model set {set_name!r} names {rel}, which does not exist"]
+    text = read_text(path, rel, errors)
+    if text is None:
+        return errors
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(text)
     except json.JSONDecodeError as exc:
         return [f"{rel}: invalid JSON: {exc}"]
     if not isinstance(data, dict):
         return [f"{rel}: top level must be a JSON object"]
-    if data.get("schema") != SCHEMA_VERSION:
-        errors.append(f"{rel}: schema must be {SCHEMA_VERSION}")
+    schema = data.get("schema")
+    if not (is_int(schema) and schema == SCHEMA_VERSION):
+        errors.append(f"{rel}: schema must be {SCHEMA_VERSION}, got {schema!r}")
     if data.get("name") != set_name:
         errors.append(f"{rel}: name must be {set_name!r}, got {data.get('name')!r}")
     for key in sorted(set(data) - {"schema", "name", "description", "roles", "exceptions"}):
@@ -296,11 +438,11 @@ def check_model_set(root: Path, team: Team, set_name: str, rel: str) -> list[str
     roles = data.get("roles")
     if not isinstance(roles, dict):
         return errors + [f"{rel}: roles must be an object"]
-    for name in team.roles:
+    for name in team.declared:
         if name not in roles:
             errors.append(f"{rel}: role {name!r} has no model")
     for name in roles:
-        if name not in (team.data.get("roles") or {}):
+        if name not in team.declared:
             errors.append(f"{rel}: unknown role {name!r}")
     models: dict[str, list[dict]] = {}
     for name, spec in team.roles.items():
@@ -321,16 +463,22 @@ def check_model_set(root: Path, team: Team, set_name: str, rel: str) -> list[str
             continue
         for key in sorted(set(exc) - {"role", "instance", "must_differ_from", "reason"}):
             errors.append(f"{where}: unknown key {key!r}")
-        if not isinstance(exc.get("reason"), str) or not exc["reason"].strip():
+        if not is_name(exc.get("reason")):
             errors.append(f"{where}: reason must be a non-empty string")
+        bad = False
+        for key in ("role", "must_differ_from"):
+            if not isinstance(exc.get(key), str):
+                errors.append(f"{where}: {key} must be a role name, got {exc.get(key)!r}")
+                bad = True
         inst = exc.get("instance", 1)
-        if not isinstance(inst, int) or isinstance(inst, bool) or inst < 1:
+        if not is_int(inst) or inst < 1:
             errors.append(f"{where}: instance must be a positive integer")
-            continue
-        declared[(exc.get("role"), inst, exc.get("must_differ_from"))] = False
+            bad = True
+        if not bad:
+            declared[(exc["role"], inst, exc["must_differ_from"])] = False
 
     for rule in team.model_rules():
-        target = rule.get("must_differ_from")
+        target = rule["must_differ_from"]
         for name in rule["roles"]:
             if name not in models or target not in models:
                 continue
@@ -356,6 +504,14 @@ def check_model_set(root: Path, team: Team, set_name: str, rel: str) -> list[str
     return errors
 
 
+def role_folders(root: Path) -> list[str]:
+    """Top-level directories that contain a ROLE.md, whatever team.json says."""
+    return sorted(
+        p.name for p in root.iterdir()
+        if p.is_dir() and not p.name.startswith(".") and (p / ROLE_FILE).is_file()
+    )
+
+
 def validate(root) -> list[str]:
     """Return a list of human-readable errors; empty means the tree is valid."""
     root = Path(root)
@@ -365,39 +521,56 @@ def validate(root) -> list[str]:
         return errors
 
     bundled: set[str] = set()
-    for name, spec in team.roles.items():
-        for rel in spec["bundle"]:
+    for name, bundle in team.bundles.items():
+        for rel in bundle:
             bundled.add(rel)
-            if not (root / rel).is_file():
+            if safe_rel(rel) and not (root / rel).is_file():
                 errors.append(f"{TEAM_FILE}: roles.{name}.bundle names {rel}, which does not exist")
 
-    # Orphans: every markdown file under a role folder or shared/ must be bundled.
+    found_roles = role_folders(root)
+    for name in found_roles:
+        if name not in team.declared:
+            errors.append(f"{name}/{ROLE_FILE}: {name}/ has a {ROLE_FILE} but is not a role in {TEAM_FILE}")
+
+    # Every markdown file under a role folder (declared or found) or shared/.
+    roles = sorted({n for n in team.declared if ROLE_NAME.match(n)} | set(found_roles))
     scanned: list[str] = []
-    for top in sorted(set(team.data.get("roles") or {}) | {SHARED}):
+    for top in roles + [SHARED]:
         folder = root / top
         if folder.is_dir():
-            scanned += sorted(p.relative_to(root).as_posix() for p in folder.rglob("*.md"))
+            scanned += sorted(p.relative_to(root).as_posix() for p in folder.rglob("*") if is_markdown(p))
+    texts: dict[str, str] = {}
     for rel in scanned:
         if rel not in bundled:
             errors.append(f"{rel}: orphan file, not listed in any bundle")
-
     for rel in scanned:
-        errors += check_forbidden(rel, read(root, rel))
+        text = read_text(root / rel, rel, errors)
+        if text is not None:
+            texts[rel] = text
+            errors += check_forbidden(rel, text)
 
-    for name, spec in team.roles.items():
-        rel = f"{name}/ROLE.md"
-        if (root / rel).is_file():
-            errors += check_role_md(name, rel, read(root, rel), spec["stamp"])
+    for name in roles:
+        rel = f"{name}/{ROLE_FILE}"
+        if rel in texts:
+            errors += check_role_md(name, rel, texts[rel])
 
-    for set_name, rel in team.model_sets().items():
+    sets = team.model_sets()
+    for set_name, rel in sets.items():
         errors += check_model_set(root, team, set_name, rel)
+    listed = {PurePosixPath(rel).as_posix() for rel in sets.values()}
+    models_dir = root / MODELS_DIR
+    if models_dir.is_dir():
+        for path in sorted(models_dir.glob("*.json")):
+            rel = path.relative_to(root).as_posix()
+            if rel not in listed:
+                errors.append(f"{rel}: model set file is not listed in {TEAM_FILE} model_sets")
     return errors
 
 
 def assemble(root: Path, team: Team, name: str) -> str:
     parts = []
     for rel in team.roles[name]["bundle"]:
-        text = read(root, rel)
+        text = (root / rel).read_text(encoding="utf-8")
         if not text.endswith("\n"):
             text += "\n"
         parts.append(f"<!-- file: {rel} -->\n{text}")
@@ -426,7 +599,11 @@ def main(argv: list[str] | None = None) -> int:
         if missing:
             print(f"missing bundle files: {', '.join(missing)}", file=sys.stderr)
             return 1
-        text = assemble(root, team, args.role)
+        try:
+            text = assemble(root, team, args.role)
+        except UnicodeDecodeError:
+            print("a bundle file is not valid UTF-8; run the validator for details", file=sys.stderr)
+            return 1
         sys.stdout.write(text)
         body = "\n".join(l for l in text.splitlines() if not l.startswith("<!-- file: "))
         files = len(team.roles[args.role]["bundle"])
