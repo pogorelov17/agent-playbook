@@ -15,7 +15,7 @@ What the plan leaves open: anything that is cheap to change and does not affect 
 
 ## Steps
 
-A step is the smallest unit that carries its own test cycle: write a test, see it fail, make it pass, verify. Each step has:
+A step is the smallest unit of work. A step that changes files carries its own test cycle: write a test, see it fail, make it pass, verify. Such a step has:
 
 ```markdown
 - [ ] **Step 3: Reject reports over the row limit**
@@ -30,7 +30,7 @@ Rules for steps:
 
 - Every step names the acceptance criterion it serves. A step serving no criterion is either a missing criterion (ask the owner) or unrequested work (delete it).
 - Every acceptance criterion is served by at least one step, and the last steps of each pull request run every acceptance check that applies to it on its final commit.
-- State the test to write first and what it asserts, concretely enough that the executor writes the test you mean.
+- For a step that changes files, state the test to write first and what it asserts, concretely enough that the executor writes the test you mean, and the change (the "Test first" and "Change" lines).
 - State the command that verifies the step and the expected output.
 - State dependencies, so the executor knows what may be reordered.
 - For a step with no behaviour to test (docs, configuration, a workflow file), name an executable check that fits: a linter, a validator, a dry run, a grep for the required content.
@@ -40,7 +40,7 @@ Rules for steps:
 - Top: the goal (see the lead role), the spec version it implements, the repository, base branch and commit, the task branch name.
 - Then: a short "approach" paragraph: the design in a few sentences, so the steps make sense as a whole.
 - Then: the steps, in order.
-- End, per pull request when the plan is split: the pull request step (open a draft pull request with the spec and the ticked checklist in the description) and the final verification step (every acceptance check that applies to this pull request, in the spec's form, and the full test suite, on the head commit). A check that needs the pull request or hosted CI is ordered after the pull request exists.
+- End, per pull request when the plan is split: the pull request step (open a draft pull request with the spec and the ticked checklist in the description) and the final verification step (every acceptance check that applies to this pull request, in the spec's form, and the full test suite, on the head commit). These two steps change no file: each states the action, the expected observation and the evidence to record, has no "Test first" line, and serves the acceptance criteria that apply to the pull request as a whole. A check that needs the pull request or hosted CI is ordered after the pull request exists.
 
 ## Splitting large work
 
@@ -51,7 +51,7 @@ If the plan has more steps than one reviewer can review well in one sitting, or 
 - has its own subset of the spec's acceptance criteria, selected and never reworded; every criterion belongs to some slice;
 - starts from the merged result of the previous slice, or from the previous slice's branch if the owner agrees to stacking.
 
-Every brief for a slice (executor and both reviewers) names the slice and lists the acceptance criteria that apply to this pull request; a brief that lists none means all criteria of the spec apply. The last pull request of the sequence is verified and reviewed against the complete spec: its briefs list every criterion, or none.
+Every brief for a slice (executor, both reviewers and arbiter) names the slice and lists the acceptance criteria that apply to this pull request; a brief that lists none means all criteria of the spec apply. The last pull request of the sequence is verified and reviewed against the complete spec: its briefs list every criterion, or none.
 
 ## Before sending
 
@@ -59,5 +59,5 @@ Read the plan as the executor would, with only the spec beside it:
 
 - Could you start step 1 without asking anything?
 - Is every path, name and command real (confirmed in the repository or created by an earlier step)?
-- Does every step have a test-first instruction and a verification command with expected output?
+- Does every step that changes files have a test-first instruction, and every step a verification (command or manual steps) with the expected result?
 - Is there anything the executor must decide that changes the result? If so, decide it now.
