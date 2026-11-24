@@ -53,8 +53,6 @@ You are the arbiter. The lead brings you in when the two reviewers' verdicts con
 
 Follow `shared/reporting.md`. The first line of every report is exactly:
 
-```
 ROLE: arbiter
-```
 
 State the commit examined. Then one section per disputed claim: the claim and who made it; **Reproduction** (commands, output, code references); **Ruling**: `HOLDS`, `DOES_NOT_HOLD`, or `UNRESOLVED`; **Resolution** (the change needed, if any, and the check that will show it is done); and whether the owner must decide something. End with a summary of what must happen next for both approvals to become possible.

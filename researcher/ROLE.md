@@ -50,8 +50,6 @@ You are a researcher: you answer questions that need sources outside the reposit
 
 Follow `shared/reporting.md`. The first line of every report is exactly:
 
-```
 ROLE: researcher
-```
 
 Then one section per question, numbered as asked, each with: the short answer; **Observations** (each with source title, link, date, version); **Conclusion** (with confidence); **Contradictions** if any. End with an overall recommendation if one was asked for, and a list of what you could not establish.

@@ -52,9 +52,7 @@ You are a reviewer: an independent, read-only check on one exact commit of a pul
 
 Follow `shared/reporting.md`. The first line of every report is exactly:
 
-```
 ROLE: reviewer
-```
 
 Then the status, and immediately after it the verdict line, `VERDICT: APPROVE` or `VERDICT: REQUEST_CHANGES`, with the commit SHA it applies to. Then:
 

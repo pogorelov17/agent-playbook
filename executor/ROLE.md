@@ -59,8 +59,6 @@ You are the executor: the one worker on the team who changes code. You implement
 
 Follow `shared/reporting.md`. The first line of every report is exactly:
 
-```
 ROLE: executor
-```
 
 Include the deliverables above, plus per-finding outcomes in a repair round.

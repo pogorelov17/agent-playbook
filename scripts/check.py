@@ -7,7 +7,8 @@ Usage:
     python3 scripts/check.py --root DIR ...  # operate on another tree (tests)
 
 The validator is generic: it knows the lead role and the shared folder by
-name, and nothing else about which roles a team has.
+name, and nothing else about which roles a team has. It is line-based, not a
+Markdown parser; see "Limits of the check" in the README.
 
 Standard library only; Python 3.10+.
 """
@@ -38,15 +39,15 @@ REQUIRED_H2 = [
 ]
 REPORT_SECTION = "Report"
 
-# Every non-lead ROLE.md contains this exact sentence, outside code, at the
-# start of a line (optionally after a list marker) and followed by nothing
-# but the end of the line or the next sentence.
+# Every non-lead ROLE.md contains this exact sentence on a plain line (see
+# plain_lines), at the start of the line (optionally after a list marker) and
+# followed by nothing but the end of the line or the next sentence.
 AGENT_BAN = (
     "You never start, spawn, schedule or delegate to other agents, sub-agents, "
     "threads, workflows or new machines, even when a tool or a built-in skill offers it."
 )
 # The Report section of every non-lead ROLE.md states this, and contains a
-# line consisting of exactly the role's stamp.
+# line consisting of exactly the role's stamp, both on plain lines.
 STAMP_RULE = "The first line of every report is exactly:"
 
 # Launcher-specific words that must not appear in role or skill texts
@@ -57,6 +58,7 @@ PROVIDERS = {"codex", "claude"}
 EFFORTS = {"minimal", "low", "medium", "high", "xhigh", "max"}
 MODEL_KEYS = {"provider", "family", "effort"}
 ROLE_NAME = re.compile(r"^[a-z][a-z0-9-]*$")
+SKIPPED_DIRS = {".git", ".github"}
 
 ATX = re.compile(r"^ {0,3}(#{1,6})(?=[ \t]|$)(.*)$")
 ATX_CLOSE = re.compile(r"(^|[ \t])#+$")
@@ -67,6 +69,8 @@ NOT_PARAGRAPH = re.compile(
     r"^ {0,3}(?:[-*+](?:[ \t]|$)|\d{1,9}[.)](?:[ \t]|$)|>|<|([-*_])(?:[ \t]*\1){2,}[ \t]*$)"
 )
 LIST_MARKER = r"(?:(?:[-*+]|\d{1,9}[.)]) )?"
+COMMENT = re.compile(r"<!--.*?(?:-->|\Z)", re.DOTALL)
+QUOTE = re.compile(r"^ {0,3}>[ ]?")
 
 
 def is_int(value) -> bool:
@@ -83,6 +87,11 @@ def safe_rel(rel) -> bool:
         return False
     p = PurePosixPath(rel)
     return not p.is_absolute() and ".." not in p.parts
+
+
+def canonical(rel: str) -> str:
+    """The path with './', duplicate and trailing separators removed."""
+    return PurePosixPath(rel).as_posix()
 
 
 def read_text(path: Path, rel: str, errors: list[str]) -> str | None:
@@ -190,7 +199,7 @@ class Team:
             ok = False
         bundle = spec.get("bundle")
         if isinstance(bundle, list):
-            self.bundles[name] = [b for b in bundle if isinstance(b, str)]
+            self.bundles[name] = [canonical(b) for b in bundle if isinstance(b, str) and b]
         if not isinstance(bundle, list) or not bundle or not all(isinstance(b, str) for b in bundle):
             self._err(f"{where}.bundle must be a non-empty list of paths")
             return False
@@ -201,12 +210,16 @@ class Team:
         seen: set[str] = set()
         in_shared = False
         for rel in bundle:
-            if rel in seen:
-                self._err(f"{where}.bundle lists {rel} twice")
+            canon = canonical(rel) if rel else rel
+            if canon in seen:
+                self._err(f"{where}.bundle lists {canon} twice")
                 ok = False
-            seen.add(rel)
-            if not safe_rel(rel) or not rel.endswith(".md"):
-                self._err(f"{where}.bundle: {rel!r} must be a relative .md path inside the repository")
+            seen.add(canon)
+            if not safe_rel(rel) or canon != rel or not rel.endswith(".md"):
+                self._err(
+                    f"{where}.bundle: {rel!r} must be a canonical relative .md path inside the "
+                    f"repository (no './', '..', '//' or leading '/')"
+                )
                 ok = False
                 continue
             top = PurePosixPath(rel).parts[0]
@@ -302,6 +315,29 @@ def atx(line: str) -> tuple[int, str] | None:
     return len(m.group(1)), title
 
 
+def strip_comments(text: str) -> str:
+    """Remove HTML comments, keeping their line breaks so line numbers hold.
+    An unclosed comment runs to the end of the file."""
+    return COMMENT.sub(lambda m: "\n" * m.group(0).count("\n"), text)
+
+
+def unquote(line: str) -> tuple[int, str]:
+    """Return the block-quote depth of a line and the line without its markers."""
+    depth = 0
+    while True:
+        m = QUOTE.match(line)
+        if not m:
+            return depth, line
+        depth += 1
+        line = line[m.end():]
+
+
+def is_plain(line: str) -> bool:
+    """A line that is not indented code and not block-quoted."""
+    indent = line[: len(line) - len(line.lstrip(" \t"))]
+    return "\t" not in indent and len(indent) < 4 and not QUOTE.match(line)
+
+
 def is_paragraph_line(line: str) -> bool:
     if not line.strip() or line.startswith("    ") or line.startswith("\t"):
         return False
@@ -309,20 +345,25 @@ def is_paragraph_line(line: str) -> bool:
 
 
 def parse(text: str) -> tuple[list[tuple[int, str]], list[tuple[str | None, str, str]]]:
-    """Return every heading (ATX of any level and setext) outside code, and
-    every line as (current level-1/2 section title, kind, line)."""
+    """Return every heading (ATX of any level and setext, also inside block
+    quotes) outside code and comments, and every line as (current level-1/2
+    section title, kind, line), where kind is 'fence', 'code', 'text' or
+    'plain' (a text line that is neither indented code nor block-quoted)."""
     found: list[tuple[int, str]] = []
     body: list[tuple[str | None, str, str]] = []
     section: str | None = None
-    prev: str | None = None
-    for kind, line in scan(text):
+    prev: tuple[int, str] | None = None
+    for kind, line in scan(strip_comments(text)):
         heading = None
         if kind == "text":
-            heading = atx(line)
-            m = SETEXT.match(line)
-            if heading is None and m and prev is not None:
-                heading = (1 if m.group(1)[0] == "=" else 2, prev.strip())
-            prev = line if heading is None and is_paragraph_line(line) else None
+            depth, rest = unquote(line)
+            heading = atx(rest)
+            m = SETEXT.match(rest)
+            if heading is None and m and prev is not None and prev[0] == depth:
+                heading = (1 if m.group(1)[0] == "=" else 2, prev[1].strip())
+            prev = (depth, rest) if heading is None and is_paragraph_line(rest) else None
+            if is_plain(line):
+                kind = "plain"
         else:
             prev = None
         if heading:
@@ -353,19 +394,27 @@ def check_role_md(name: str, rel: str, text: str) -> list[str]:
         return errors
 
     ban = re.compile("^" + LIST_MARKER + re.escape(AGENT_BAN) + "(?: |$)")
-    if not any(kind == "text" and ban.match(" ".join(line.split())) for _, kind, line in body):
+    if not any(kind == "plain" and ban.match(" ".join(line.split())) for _, kind, line in body):
         errors.append(
-            f"{rel}: missing the agent-ban sentence; a line must start (after an optional list marker) "
-            f"with exactly: {AGENT_BAN!r}"
+            f"{rel}: missing the agent-ban sentence; a plain line (not in a comment, code or block quote) "
+            f"must start (after an optional list marker) with exactly: {AGENT_BAN!r}"
         )
     stamp = f"ROLE: {name}"
     report = [(kind, line) for sec, kind, line in body if sec == REPORT_SECTION]
-    if not any(kind != "fence" and line.strip() == stamp for kind, line in report):
+    if not any(kind == "plain" and line.strip() == stamp for kind, line in report):
         errors.append(
-            f"{rel}: the {REPORT_SECTION} section must contain a line consisting of exactly {stamp!r}"
+            f"{rel}: the {REPORT_SECTION} section must contain a line consisting of exactly {stamp!r}, "
+            f"not in a comment, code or block quote"
         )
-    prose = " ".join(" ".join(line for kind, line in report if kind == "text").split())
-    if STAMP_RULE not in prose:
+    # The instruction may wrap across consecutive plain lines of one paragraph.
+    paragraphs, current = [], []
+    for kind, line in report + [("end", "")]:
+        if kind == "plain" and line.strip():
+            current.append(line)
+        else:
+            paragraphs.append(" ".join(" ".join(current).split()))
+            current = []
+    if not any(STAMP_RULE in p for p in paragraphs):
         errors.append(f"{rel}: the {REPORT_SECTION} section must state {STAMP_RULE!r}")
     return errors
 
@@ -434,6 +483,8 @@ def check_model_set(root: Path, team: Team, set_name: str, rel: str) -> list[str
         errors.append(f"{rel}: name must be {set_name!r}, got {data.get('name')!r}")
     for key in sorted(set(data) - {"schema", "name", "description", "roles", "exceptions"}):
         errors.append(f"{rel}: unknown key {key!r}")
+    if "description" in data and not isinstance(data["description"], str):
+        errors.append(f"{rel}: description must be a string, got {data['description']!r}")
 
     roles = data.get("roles")
     if not isinstance(roles, dict):
@@ -505,10 +556,11 @@ def check_model_set(root: Path, team: Team, set_name: str, rel: str) -> list[str
 
 
 def role_folders(root: Path) -> list[str]:
-    """Top-level directories that contain a ROLE.md, whatever team.json says."""
+    """Top-level directories that contain a ROLE.md, whatever team.json says,
+    including dot-folders; only .git and .github are skipped."""
     return sorted(
         p.name for p in root.iterdir()
-        if p.is_dir() and not p.name.startswith(".") and (p / ROLE_FILE).is_file()
+        if p.is_dir() and p.name not in SKIPPED_DIRS and (p / ROLE_FILE).is_file()
     )
 
 
