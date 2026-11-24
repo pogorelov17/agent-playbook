@@ -7,10 +7,10 @@ Usage:
     python3 scripts/check.py --root DIR ...  # operate on another tree (tests)
 
 The validator is generic: it knows the lead role and the shared folder by
-name, and nothing else about which roles a team has. It does not interpret
-Markdown: it requires every ROLE.md to avoid the constructs that would need
-interpreting (see STRICT_FORM) and then compares whole lines; see "Limits of
-the check" in the README.
+name, and nothing else about which roles a team has. Agents read the raw
+text of their instructions, so the contract for a ROLE.md is defined on raw
+lines (split on '\n' only) and never on rendered Markdown; see "Validation"
+in the README.
 
 Standard library only; Python 3.10+.
 """
@@ -42,7 +42,7 @@ REQUIRED_H2 = [
 REPORT_SECTION = "Report"
 
 # Every non-lead ROLE.md has, outside fenced code, a line that is exactly this
-# sentence, optionally after a "- " or "N. " list marker.
+# sentence, optionally after a "- " or "N. " list marker (N: 1-9 ASCII digits).
 AGENT_BAN = (
     "You never start, spawn, schedule or delegate to other agents, sub-agents, "
     "threads, workflows or new machines, even when a tool or a built-in skill offers it."
@@ -62,25 +62,32 @@ MODEL_KEYS = {"provider", "family", "effort"}
 ROLE_NAME = re.compile(r"^[a-z][a-z0-9-]*$")
 SKIPPED_DIRS = {".git", ".github"}
 
-ATX = re.compile(r"^ {0,3}(#{1,6})(?=[ \t]|$)(.*)$")
-ATX_CLOSE = re.compile(r"(^|[ \t])#+$")
-FENCE_OPEN = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
-FENCE_CLOSE = re.compile(r"^ {0,3}(`{3,}|~{3,})[ \t]*$")
-BAN_LINE = re.compile(r"^(?:- |\d{1,9}\. )?" + re.escape(AGENT_BAN) + r"$")
+# V2: a ROLE.md is judged on raw lines. All patterns are ASCII-only on purpose
+# ([0-9], literal spaces), so they mean exactly what the README says.
+LIST_MARKER = r"(?:[-*+]|[0-9]+[.)]) +"
+HASH_LINE = re.compile(r"^ *(?:" + LIST_MARKER + r")*#")
+FENCE_LINE = re.compile(r"^( *)((?:" + LIST_MARKER + r")*)(`{3,}|~{3,})(.*)$")
+BAN_LINE = re.compile(r"^(?:- |[0-9]{1,9}\. )?" + re.escape(AGENT_BAN) + r"$")
 QUOTED = re.compile(r"^ *>")
+ANGLE = re.compile(r"^ *<")
 UNDERLINE = re.compile(r"^ *(=+|-+) *$")
 
-# V1: constructs that are errors in every ROLE.md, so the remaining checks can
-# be plain line comparisons. Each yields one error per offending line.
+# V1 and V2: constructs that are errors in every ROLE.md, so the remaining
+# checks can be plain line comparisons. Each yields one error per offending line.
 STRICT_FORM = {
     "comment": "an HTML comment ('<!--') is not allowed in a ROLE.md",
     "quote": "a block-quoted line ('>') is not allowed in a ROLE.md",
+    "angle": "a line starting with '<' (raw HTML) is not allowed in a ROLE.md",
     "setext": (
         "a setext heading underline is not allowed in a ROLE.md "
         "(a line of only '=', or of only '-' after a non-blank line)"
     ),
-    "tab": "a tab character is not allowed in a ROLE.md",
     "indent": "a line indented by four or more spaces outside fenced code is not allowed in a ROLE.md",
+    "hash": (
+        "a line starting with '#' must be one of the required headings, exactly and at column 0 "
+        "(this applies inside fenced code and after a list marker too)"
+    ),
+    "fence": "a fence line must start at column 0 and must not follow a list marker",
 }
 
 
@@ -293,60 +300,94 @@ class Team:
         return {k: v for k, v in sets.items() if safe_rel(v)}
 
 
-def scan(text: str):
-    """Yield (line number, kind, line) for each line: kind is 'fence' (an
-    opening or closing fence line), 'code' (inside a fence) or 'text'.
+def raw_lines(text: str) -> list[str]:
+    """The file's lines: split on '\\n' only, after normalising '\\r\\n' and
+    '\\r'. A final newline ends the last line; it does not start another."""
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    lines = text.split("\n")
+    if lines and lines[-1] == "":
+        lines.pop()
+    return lines
 
-    A fence opens with three or more backticks or tildes and closes only with
-    a line of the same character, at least as long, and nothing else. A
-    backtick opener whose rest contains a backtick is inline code, not a fence.
+
+def is_blank(line: str) -> bool:
+    """Empty or ASCII spaces only; any other whitespace is not blank."""
+    return line.strip(" ") == ""
+
+
+def allowed_char(ch: str) -> bool:
+    return ch == "\n" or "\x20" <= ch <= "\x7e"
+
+
+def scan(lines: list[str]):
+    """Yield (line number, kind, line) for each raw line: kind is 'fence' (an
+    opening or closing fence line), 'code' (inside a fence) or 'text'; and,
+    last, (line number of the opener, 'unclosed', line) if a fence is never
+    closed.
+
+    A fence line is one whose first non-space characters, after any list
+    markers, are three or more backticks or tildes. Any fence line outside a
+    fence opens one (a misplaced opener is reported separately, and treating
+    what follows as code keeps it from satisfying a required line). A fence
+    closes only with a fence line of the same character, at least as long,
+    followed by nothing but spaces.
     """
-    fence: tuple[str, int] | None = None
-    for n, line in enumerate(text.splitlines(), 1):
+    fence: tuple[str, int, int, str] | None = None
+    for n, line in enumerate(lines, 1):
+        m = FENCE_LINE.match(line)
         if fence:
-            m = FENCE_CLOSE.match(line)
-            if m and m.group(1)[0] == fence[0] and len(m.group(1)) >= fence[1]:
+            if m and m.group(3)[0] == fence[0] and len(m.group(3)) >= fence[1] and is_blank(m.group(4)):
                 fence = None
                 yield n, "fence", line
             else:
                 yield n, "code", line
             continue
-        m = FENCE_OPEN.match(line)
-        if m and not (m.group(1)[0] == "`" and "`" in m.group(2)):
-            fence = (m.group(1)[0], len(m.group(1)))
+        if m:
+            fence = (m.group(3)[0], len(m.group(3)), n, line)
             yield n, "fence", line
             continue
         yield n, "text", line
+    if fence:
+        yield fence[2], "unclosed", fence[3]
 
 
-def atx(line: str) -> tuple[int, str] | None:
-    m = ATX.match(line)
-    if not m:
-        return None
-    title = ATX_CLOSE.sub("", m.group(2).strip()).strip()
-    return len(m.group(1)), title
-
-
-def strict_form_errors(rel: str, lines: list[tuple[int, str, str]]) -> list[str]:
-    """The V1 errors: comments, quotes, setext underlines and tabs anywhere;
-    four-space indentation outside fenced code."""
+def strict_form_errors(rel: str, lines: list[tuple[int, str, str]], required: list[str]) -> list[str]:
+    """The V1 and V2 line errors. Everywhere: characters, comments, quotes,
+    '<' lines, setext underlines, hash lines other than the required headings
+    and misplaced fence lines. Outside fenced code: four-space indentation."""
     errors = []
     prev_blank = True
     for n, kind, line in lines:
+        if kind == "unclosed":
+            errors.append(
+                f"{rel}:{n}: this fence is never closed (a closing fence of the same character, "
+                f"at least as long, must follow before the end of the file)"
+            )
+            continue
+        for code in sorted({ord(ch) for ch in line if not allowed_char(ch)}):
+            errors.append(
+                f"{rel}:{n}: character U+{code:04X} is not allowed in a ROLE.md "
+                f"(only printable ASCII, 0x20-0x7E, and line breaks)"
+            )
         found = []
         if "<!--" in line:
             found.append("comment")
         if QUOTED.match(line):
             found.append("quote")
+        if ANGLE.match(line):
+            found.append("angle")
         m = UNDERLINE.match(line)
         if m and (m.group(1)[0] == "=" or not prev_blank):
             found.append("setext")
-        if "\t" in line:
-            found.append("tab")
-        if kind == "text" and line.startswith("    ") and line.strip():
+        if kind != "code" and line.startswith("    ") and not is_blank(line):
             found.append("indent")
+        if HASH_LINE.match(line) and line not in required:
+            found.append("hash")
+        fm = FENCE_LINE.match(line)
+        if fm and (fm.group(1) or fm.group(2)):
+            found.append("fence")
         errors += [f"{rel}:{n}: {STRICT_FORM[key]}" for key in found]
-        prev_blank = not line.strip()
+        prev_blank = is_blank(line)
     return errors
 
 
@@ -355,46 +396,53 @@ def role_title(name: str) -> str:
 
 
 def check_role_md(name: str, rel: str, text: str) -> list[str]:
-    lines = list(scan(text))
-    errors = strict_form_errors(rel, lines)
+    raw = raw_lines(text)
+    required = [f"# {role_title(name)}"] + [f"## {h}" for h in REQUIRED_H2]
+    scanned = list(scan(raw))
+    errors = strict_form_errors(rel, scanned, required)
+    lines = [entry for entry in scanned if entry[1] != "unclosed"]
 
-    headings: list[tuple[int, str]] = []
-    sections: list[str | None] = []  # the level-1/2 section each line is in
-    section: str | None = None
-    for _, kind, line in lines:
-        heading = atx(line) if kind == "text" else None
-        if heading:
-            headings.append(heading)
-            if heading[0] <= 2:
-                section = heading[1]
-        sections.append(section)
-    expected = [(1, role_title(name))] + [(2, h) for h in REQUIRED_H2]
-    if headings != expected:
-        want = ", ".join("#" * lvl + " " + t for lvl, t in expected)
-        got = ", ".join("#" * lvl + " " + t for lvl, t in headings) or "none"
+    # Rule 2 does not depend on fences: every hash line counts, wherever it is.
+    hash_lines = [(n, line) for n, line in enumerate(raw, 1) if HASH_LINE.match(line)]
+    found = [line for _, line in hash_lines]
+    if found != required:
+        i = next((k for k, (a, b) in enumerate(zip(found, required)) if a != b), min(len(found), len(required)))
+        at = hash_lines[i][0] if i < len(hash_lines) else max(len(raw), 1)
+        want = ", ".join(required)
+        got = ", ".join(found) or "none"
         errors.append(
-            f"{rel}: headings must be exactly [{want}] in this order, with no other headings; "
-            f"found [{got}]"
+            f"{rel}:{at}: headings must be exactly [{want}] in this order, each once and at column 0, "
+            f"with no other line starting with '#'; found [{got}]"
         )
     if name == LEAD:
         return errors
 
+    sections: list[str | None] = []  # the section (required heading) each line is in
+    section: str | None = None
+    heading_at: dict[str, int] = {}
+    for n, _, line in lines:
+        if line in required:
+            section = line[3:] if line.startswith("## ") else None
+            heading_at.setdefault(line, n)
+        sections.append(section)
+    report_at = heading_at.get(f"## {REPORT_SECTION}", 1)
+
     if not any(kind == "text" and BAN_LINE.match(line) for _, kind, line in lines):
         errors.append(
-            f"{rel}: missing the agent-ban sentence: outside fenced code, one line must be exactly "
+            f"{rel}:1: missing the agent-ban sentence: outside fenced code, one line must be exactly "
             f"{AGENT_BAN!r}, optionally after a '- ' or 'N. ' list marker"
         )
     stamp = f"ROLE: {name}"
     report = [(i, kind, line) for i, (_, kind, line) in enumerate(lines) if sections[i] == REPORT_SECTION]
     if not any(kind == "text" and line == stamp for _, kind, line in report):
         errors.append(
-            f"{rel}: the {REPORT_SECTION} section must contain a line consisting of exactly {stamp!r}, "
-            f"outside fenced code"
+            f"{rel}:{report_at}: the {REPORT_SECTION} section must contain a line consisting of exactly "
+            f"{stamp!r}, outside fenced code"
         )
     rules = [i for i, kind, line in report if kind == "text" and line == FIRST_LINE_RULE]
     if not rules:
         errors.append(
-            f"{rel}: the {REPORT_SECTION} section must contain the line {FIRST_LINE_RULE!r}, "
+            f"{rel}:{report_at}: the {REPORT_SECTION} section must contain the line {FIRST_LINE_RULE!r}, "
             f"exactly and on one line, outside fenced code"
         )
     elif not any(followed_by(lines, i, stamp) for i in rules):
@@ -408,14 +456,14 @@ def check_role_md(name: str, rel: str, text: str) -> list[str]:
 def followed_by(lines: list[tuple[int, str, str]], i: int, wanted: str) -> bool:
     """True if the next non-blank line after lines[i] is a text line equal to `wanted`."""
     for _, kind, line in lines[i + 1:]:
-        if line.strip():
+        if not is_blank(line):
             return kind == "text" and line == wanted
     return False
 
 
 def check_forbidden(rel: str, text: str) -> list[str]:
     errors = []
-    for n, line in enumerate(text.splitlines(), 1):
+    for n, line in enumerate(raw_lines(text), 1):
         for m in FORBIDDEN.finditer(line):
             errors.append(f"{rel}:{n}: forbidden word {m.group(0)!r}")
     return errors
@@ -549,6 +597,23 @@ def check_model_set(root: Path, team: Team, set_name: str, rel: str) -> list[str
     return errors
 
 
+def link_problem(root: Path, rel: str) -> str | None:
+    """Why a bundle path is not a plain file inside the repository, or None.
+
+    No component of the path may be a symbolic link, and the resolved path
+    must lie inside the repository root.
+    """
+    parts = PurePosixPath(rel).parts
+    for k in range(1, len(parts) + 1):
+        if (root / Path(*parts[:k])).is_symlink():
+            return f"passes through a symbolic link ({'/'.join(parts[:k])}); bundle files must be plain files"
+    try:
+        (root / rel).resolve().relative_to(root.resolve())
+    except ValueError:
+        return "resolves outside the repository"
+    return None
+
+
 def role_folders(root: Path) -> list[str]:
     """Top-level directories that contain a ROLE.md, whatever team.json says,
     including dot-folders; only .git and .github are skipped."""
@@ -570,7 +635,12 @@ def validate(root) -> list[str]:
     for name, bundle in team.bundles.items():
         for rel in bundle:
             bundled.add(rel)
-            if safe_rel(rel) and not (root / rel).is_file():
+            if not safe_rel(rel):
+                continue
+            problem = link_problem(root, rel)
+            if problem:
+                errors.append(f"{TEAM_FILE}: roles.{name}.bundle: {rel} {problem}")
+            if not (root / rel).is_file():
                 errors.append(f"{TEAM_FILE}: roles.{name}.bundle names {rel}, which does not exist")
 
     found_roles = role_folders(root)
@@ -589,7 +659,9 @@ def validate(root) -> list[str]:
     for rel in scanned:
         if rel not in bundled:
             errors.append(f"{rel}: orphan file, not listed in any bundle")
-    for rel in scanned:
+    # V3: scan everything the printer could emit, not only what discovery found.
+    extra = sorted(rel for rel in bundled - set(scanned) if safe_rel(rel) and (root / rel).is_file())
+    for rel in scanned + extra:
         text = read_text(root / rel, rel, errors)
         if text is not None:
             texts[rel] = text
