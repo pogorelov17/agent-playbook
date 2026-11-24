@@ -1,0 +1,83 @@
+{
+  "schema": 1,
+  "name": "agent-playbook",
+  "version": "1.0.0",
+  "roles": {
+    "lead": {
+      "stamp": "ROLE: lead",
+      "instances": 1,
+      "bundle": [
+        "lead/ROLE.md",
+        "lead/skills/clarifying.md",
+        "lead/skills/writing-spec.md",
+        "lead/skills/writing-plan.md",
+        "lead/skills/briefing.md",
+        "shared/verification.md",
+        "shared/reporting.md"
+      ]
+    },
+    "executor": {
+      "stamp": "ROLE: executor",
+      "instances": 1,
+      "bundle": [
+        "executor/ROLE.md",
+        "executor/skills/following-plan.md",
+        "executor/skills/tests-first.md",
+        "executor/skills/handling-review.md",
+        "shared/verification.md",
+        "shared/debugging.md",
+        "shared/reporting.md"
+      ]
+    },
+    "reviewer": {
+      "stamp": "ROLE: reviewer",
+      "instances": 2,
+      "bundle": [
+        "reviewer/ROLE.md",
+        "reviewer/skills/reviewing.md",
+        "shared/verification.md",
+        "shared/debugging.md",
+        "shared/reporting.md"
+      ]
+    },
+    "scout": {
+      "stamp": "ROLE: scout",
+      "instances": 1,
+      "bundle": [
+        "scout/ROLE.md",
+        "scout/skills/exploring.md",
+        "shared/verification.md",
+        "shared/debugging.md",
+        "shared/reporting.md"
+      ]
+    },
+    "researcher": {
+      "stamp": "ROLE: researcher",
+      "instances": 1,
+      "bundle": [
+        "researcher/ROLE.md",
+        "researcher/skills/researching.md",
+        "shared/verification.md",
+        "shared/reporting.md"
+      ]
+    },
+    "arbiter": {
+      "stamp": "ROLE: arbiter",
+      "instances": 1,
+      "bundle": [
+        "arbiter/ROLE.md",
+        "shared/verification.md",
+        "shared/debugging.md",
+        "shared/reporting.md"
+      ]
+    }
+  },
+  "model_rules": [
+    {"roles": ["reviewer", "arbiter"], "must_differ_from": "executor"}
+  ],
+  "model_sets": {
+    "codex-only": "models/codex-only.json",
+    "claude-only": "models/claude-only.json",
+    "codex+claude": "models/codex+claude.json"
+  }
+}

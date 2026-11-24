@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "name": "claude-only",
+  "description": "Every role runs on the claude provider.",
+  "roles": {
+    "lead": {"provider": "claude", "family": "opus", "effort": "high"},
+    "executor": {"provider": "claude", "family": "opus", "effort": "high"},
+    "reviewer": [
+      {"provider": "claude", "family": "fable", "effort": "high"},
+      {"provider": "claude", "family": "sonnet", "effort": "high"}
+    ],
+    "scout": {"provider": "claude", "family": "haiku", "effort": "medium"},
+    "researcher": {"provider": "claude", "family": "opus", "effort": "high"},
+    "arbiter": {"provider": "claude", "family": "fable", "effort": "high"}
+  }
+}

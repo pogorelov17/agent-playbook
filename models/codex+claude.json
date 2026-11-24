@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "name": "codex+claude",
+  "description": "Roles split across both providers so that review crosses providers.",
+  "roles": {
+    "lead": {"provider": "codex", "family": "astra", "effort": "high"},
+    "executor": {"provider": "claude", "family": "opus", "effort": "high"},
+    "reviewer": [
+      {"provider": "claude", "family": "fable", "effort": "high"},
+      {"provider": "codex", "family": "astra", "effort": "high"}
+    ],
+    "scout": {"provider": "claude", "family": "haiku", "effort": "medium"},
+    "researcher": {"provider": "codex", "family": "sol", "effort": "high"},
+    "arbiter": {"provider": "codex", "family": "astra", "effort": "xhigh"}
+  }
+}
