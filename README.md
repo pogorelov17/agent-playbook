@@ -38,7 +38,7 @@ Every `ROLE.md` has exactly these headings, in this order: `# <Role name>`, `## 
 2. **Hash lines.** Any line whose first non-space character is `#`, or whose first non-space characters are a list marker (`-`, `*`, `+`, or digits followed by `.` or `)`) followed by spaces and then `#`, unless it is one of the seven required heading lines, exactly, at column 0, in order, each once. This applies everywhere, inside fenced code too.
 3. **Fences.** A fence line (first non-space characters three or more backticks or tildes) that does not start at column 0 or follows a list marker; a fence that is not closed by a fence of the same character, at least as long, before the end of the file.
 4. **Angle brackets.** A line whose first non-space character is `<` (no raw HTML).
-5. **Comments, quotes, setext underlines, indentation.** `<!--` anywhere; a block-quoted line (optional spaces, then `>`); a line of only `=` characters, or of only `-` characters directly after a non-blank line (put a blank line before a `---` thematic break); a line indented by four or more spaces outside fenced code.
+5. **Comments, quotes, setext underlines, indentation.** `<!--` anywhere; a block-quoted line (optional spaces, then `>`); a line that is one or more `=` and nothing else, or three or more `-` and nothing else directly after a non-blank line (put a blank line before a `---` thematic break); a line indented by four or more spaces outside fenced code.
 6. **Required lines.** The ban, the first-line instruction and the stamp (below) are compared as whole raw lines and must be outside fenced code.
 
 Every role except `lead` states, in its `ROLE.md`: the ban on starting other agents, the duty to read and follow the project's own instruction file (`AGENTS.md` or `CLAUDE.md`), and its report stamp (`ROLE: <role>`), which must be the first line of every report.
@@ -109,7 +109,7 @@ python3 -m unittest discover -s tests       # tests for the validator
 
 The forbidden-word scan and the UTF-8 check read every Markdown file under the role folders and `shared/` and every file named in any bundle, raw, so `--print` never emits text the check did not read. Files that are not valid UTF-8, and fields of the wrong JSON type (including a model set's optional `description`, which must be a string), are reported as errors with the file and field named.
 
-**Limits of the check.** It checks that the ban, the instruction and the stamp are present, not what neighbouring sentences say about them; reviewers read the text. Skill and shared files have no structural checks.
+**Limits of the check.** The check guards this repository's own files against accidental damage; it is not a general Markdown linter and does not claim to classify every possible input. It checks that the ban, the instruction and the stamp are present, not what neighbouring sentences say about them; reviewers read the text. Skill and shared files have no structural checks.
 
 CI (`.github/workflows/check.yml`) runs both commands on every pull request and on pushes to `main`.
 

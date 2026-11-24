@@ -65,12 +65,12 @@ SKIPPED_DIRS = {".git", ".github"}
 # V2: a ROLE.md is judged on raw lines. All patterns are ASCII-only on purpose
 # ([0-9], literal spaces), so they mean exactly what the README says.
 LIST_MARKER = r"(?:[-*+]|[0-9]+[.)]) +"
-HASH_LINE = re.compile(r"^ *(?:" + LIST_MARKER + r")*#")
+HASH_LINE = re.compile(r"^ *(?:" + LIST_MARKER + r")?#")
 FENCE_LINE = re.compile(r"^( *)((?:" + LIST_MARKER + r")*)(`{3,}|~{3,})(.*)$")
 BAN_LINE = re.compile(r"^(?:- |[0-9]{1,9}\. )?" + re.escape(AGENT_BAN) + r"$")
 QUOTED = re.compile(r"^ *>")
 ANGLE = re.compile(r"^ *<")
-UNDERLINE = re.compile(r"^ *(=+|-+) *$")
+UNDERLINE = re.compile(r"^(=+|-{3,})$")
 
 # V1 and V2: constructs that are errors in every ROLE.md, so the remaining
 # checks can be plain line comparisons. Each yields one error per offending line.
@@ -80,7 +80,7 @@ STRICT_FORM = {
     "angle": "a line starting with '<' (raw HTML) is not allowed in a ROLE.md",
     "setext": (
         "a setext heading underline is not allowed in a ROLE.md "
-        "(a line of only '=', or of only '-' after a non-blank line)"
+        "(a line of only '=', or of only three or more '-' after a non-blank line)"
     ),
     "indent": "a line indented by four or more spaces outside fenced code is not allowed in a ROLE.md",
     "hash": (
@@ -329,14 +329,14 @@ def scan(lines: list[str]):
     markers, are three or more backticks or tildes. Any fence line outside a
     fence opens one (a misplaced opener is reported separately, and treating
     what follows as code keeps it from satisfying a required line). A fence
-    closes only with a fence line of the same character, at least as long,
-    followed by nothing but spaces.
+    closes only with a fence line of the same character, at least as long;
+    what follows the fence characters does not matter.
     """
     fence: tuple[str, int, int, str] | None = None
     for n, line in enumerate(lines, 1):
         m = FENCE_LINE.match(line)
         if fence:
-            if m and m.group(3)[0] == fence[0] and len(m.group(3)) >= fence[1] and is_blank(m.group(4)):
+            if m and m.group(3)[0] == fence[0] and len(m.group(3)) >= fence[1]:
                 fence = None
                 yield n, "fence", line
             else:
