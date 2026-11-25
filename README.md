@@ -1,14 +1,49 @@
-<h1 align="center">🤖 agent-playbook</h1>
+<h1 align="center">📘 Agent Playbook</h1>
 
-<p align="center"><b>Roles and skills for a team of AI coding agents: who does what, and how.</b></p>
+<p align="center"><b>Roles, skills, and model sets for a team of coding agents.</b></p>
 
 <p align="center">
-  <a href="https://github.com/pogorelov17/agent-playbook/actions/workflows/check.yml"><img alt="check" src="https://github.com/pogorelov17/agent-playbook/actions/workflows/check.yml/badge.svg"></a>
-  <img alt="6 roles" src="https://img.shields.io/badge/roles-6-8250df">
-  <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-3776ab?logo=python&logoColor=white">
-  <img alt="Markdown + JSON" src="https://img.shields.io/badge/format-Markdown%20%2B%20JSON-1a7f37">
-  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-f59e0b"></a>
+  <a href="https://github.com/pogorelov17/agent-playbook/actions/workflows/check.yml"><img alt="CI" src="https://github.com/pogorelov17/agent-playbook/actions/workflows/check.yml/badge.svg"></a>
+  <img alt="6 roles" src="https://img.shields.io/badge/roles-6-0891b2">
 </p>
+
+<p align="center">
+  <a href="#-roles">Roles</a> · <a href="#️-model-sets">Model sets</a> · <a href="https://github.com/pogorelov17/t3-boat">T3 Boat ↗</a>
+</p>
+
+```mermaid
+flowchart TD
+    request(["Owner · Request"])
+    lead["Lead · Agree on scope and plan"]
+    exec["Executor · Implement and test"]
+    pr["Draft PR"]
+    r1["Reviewer 1"]
+    r2["Reviewer 2"]
+    approve{"Both approve?"}
+    merge(["Owner · Merge decision"])
+    arbiter["Arbiter · Resolve findings"]
+
+    request --> lead
+    lead --> exec
+    exec --> pr
+    pr --> r1
+    pr --> r2
+    r1 --> approve
+    r2 --> approve
+    approve -->|Yes| merge
+    approve -->|No| arbiter
+    arbiter -->|Fix required| exec
+
+    classDef owner fill:#e0f2fe,stroke:#0284c7,color:#0c4a6e
+    classDef work fill:#f0fdfa,stroke:#0d9488,color:#134e4a
+    classDef review fill:#f5f3ff,stroke:#8b5cf6,color:#4c1d95
+    classDef decision fill:#fff7ed,stroke:#d97706,color:#78350f
+
+    class request,lead,merge owner
+    class exec,pr work
+    class r1,r2 review
+    class approve,arbiter decision
+```
 
 A **lead** talks to the human owner, clarifies the task, writes a spec and a plan, and dispatches **workers**. Each worker runs alone in its own isolated workspace, with no shared memory and no view of the others. This repository holds the instructions each of them reads. It is plain Markdown and JSON with no tie to any particular launcher: any tool can assemble one instruction file per role from it.
 
@@ -26,58 +61,6 @@ Each role lives in `roles/<role>/`: its `ROLE.md` and, where it has them, its ow
 | ⚖️ | `arbiter` | Settles disputed review claims by reproduction; cannot waive an approval. | 1 |
 
 ## 🔄 Delivery workflow
-
-```mermaid
-flowchart TD
-    owner(["👤 Owner"])
-    lead["🧭 Lead<br/>clarify · spec · plan · brief"]
-    scout["🔎 Scout<br/>facts from the code"]
-    researcher["📚 Researcher<br/>facts from outside sources"]
-    exec["🛠️ Executor<br/>test-first · draft pull request"]
-    reviews["🧐 Two reviewers<br/>independent, same exact commit"]
-    dispute{"Verdicts conflict,<br/>finding disputed or<br/>two failed repairs?"}
-    arbiter["⚖️ Arbiter<br/>rules by reproduction"]
-    stands{"A blocking<br/>finding stands?"}
-    repair["🛠️ Fresh executor<br/>repairs on the same branch"]
-    replace["🧐 Fresh reviewer<br/>same unchanged commit"]
-    done["🏁 Both APPROVE on the head commit<br/>every criterion evidenced"]
-    merge(["✅ Owner decides and merges"])
-
-    owner -->|task| lead
-    lead -.->|questions| scout
-    lead -.->|questions| researcher
-    lead -->|brief| exec
-    exec -->|head commit| reviews
-    reviews -->|both verdicts in| dispute
-    dispute -->|yes| arbiter
-    dispute -->|no| stands
-    arbiter --> stands
-    arbiter -.->|unresolved| owner
-    stands -->|yes| repair
-    repair -->|new commit, two fresh reviews| reviews
-    stands -->|"no, but a REQUEST_CHANGES was overturned"| replace
-    replace -->|its verdict replaces it| dispute
-    stands -->|no| done
-    done --> merge
-
-    classDef human fill:#8250df,stroke:#6639ba,color:#ffffff
-    classDef leader fill:#0969da,stroke:#0550ae,color:#ffffff
-    classDef support fill:#0e7490,stroke:#155e75,color:#ffffff
-    classDef build fill:#1a7f37,stroke:#116329,color:#ffffff
-    classDef review fill:#bc4c00,stroke:#953800,color:#ffffff
-    classDef judge fill:#cf222e,stroke:#a40e26,color:#ffffff
-    classDef gate fill:#fff8c5,stroke:#9a6700,color:#3b2300
-    classDef finish fill:#2da44e,stroke:#1a7f37,color:#ffffff
-
-    class owner,merge human
-    class lead leader
-    class scout,researcher support
-    class exec,repair build
-    class reviews,replace review
-    class arbiter judge
-    class dispute,stands gate
-    class done finish
-```
 
 The executor opens a draft pull request; two reviewers review the same commit independently. When the verdicts conflict, or a finding is disputed (or after two failed repair rounds), the arbiter rules before any repair. An upheld finding leads to a repair by a fresh executor on the same branch and two fresh reviews of the new commit; if every finding behind a `REQUEST_CHANGES` is overturned, a replacement reviewer reviews the unchanged commit; a ruling that stays unresolved goes to the owner. Only the owner merges.
 
