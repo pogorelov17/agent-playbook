@@ -1,38 +1,123 @@
-# agent-playbook
-Roles and skills for a team of AI coding agents — who does what, and how.
+<h1 align="center">🤖 agent-playbook</h1>
+
+<p align="center"><b>Roles and skills for a team of AI coding agents: who does what, and how.</b></p>
+
+<p align="center">
+  <a href="https://github.com/pogorelov17/agent-playbook/actions/workflows/check.yml"><img alt="check" src="https://github.com/pogorelov17/agent-playbook/actions/workflows/check.yml/badge.svg"></a>
+  <img alt="6 roles" src="https://img.shields.io/badge/roles-6-8250df">
+  <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-3776ab?logo=python&logoColor=white">
+  <img alt="Markdown + JSON" src="https://img.shields.io/badge/format-Markdown%20%2B%20JSON-1a7f37">
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-f59e0b"></a>
+</p>
 
 A **lead** talks to the human owner, clarifies the task, writes a spec and a plan, and dispatches **workers**. Each worker runs alone in its own isolated workspace, with no shared memory and no view of the others. This repository holds the instructions each of them reads. It is plain Markdown and JSON with no tie to any particular launcher: any tool can assemble one instruction file per role from it.
 
-## Roles
+## 🧭 Roles
 
-| Role | Purpose | Instances |
-| --- | --- | --- |
-| `lead` | Talks to the owner; clarification gate, spec, plan, goal, dispatch, delivery. Never edits code, never merges. | 1 |
-| `executor` | Implements the plan test-first on a task branch and opens a draft pull request. | 1 |
-| `reviewer` | Independently reviews one exact commit against the spec; returns `APPROVE` or `REQUEST_CHANGES`. | 2 |
-| `scout` | Read-only code discovery; answers specific questions with paths and line numbers. | 1 |
-| `researcher` | Answers questions that need outside sources, with links, dates and confidence. | 1 |
-| `arbiter` | Settles disputed review claims by reproduction; cannot waive an approval. | 1 |
+Each role lives in `roles/<role>/`: its `ROLE.md` and, where it has them, its own `skills/`. Files used by several roles live in `shared/`.
 
-The delivery flow: the executor opens a draft pull request; two reviewers review the same commit independently. When the verdicts conflict, or a finding is disputed (or after two failed repair rounds), the arbiter rules before any repair. An upheld finding leads to a repair by a fresh executor on the same branch and two fresh reviews of the new commit; if every finding behind a `REQUEST_CHANGES` is overturned, a replacement reviewer reviews the unchanged commit; a ruling that stays unresolved goes to the owner. Only the owner merges.
+| | Role | Purpose | Instances |
+| --- | --- | --- | :---: |
+| 🧭 | `lead` | Talks to the owner; clarification gate, spec, plan, goal, dispatch, delivery. Never edits code, never merges. | 1 |
+| 🛠️ | `executor` | Implements the plan test-first on a task branch and opens a draft pull request. | 1 |
+| 🧐 | `reviewer` | Independently reviews one exact commit against the spec; returns `APPROVE` or `REQUEST_CHANGES`. | 2 |
+| 🔎 | `scout` | Read-only code discovery; answers specific questions with paths and line numbers. | 1 |
+| 📚 | `researcher` | Answers questions that need outside sources, with links, dates and confidence. | 1 |
+| ⚖️ | `arbiter` | Settles disputed review claims by reproduction; cannot waive an approval. | 1 |
 
-## Layout
+## 🔄 Delivery workflow
 
+```mermaid
+flowchart TD
+    owner(["👤 Owner"])
+    lead["🧭 Lead<br/>clarify · spec · plan · brief"]
+    scout["🔎 Scout<br/>facts from the code"]
+    researcher["📚 Researcher<br/>facts from outside sources"]
+    exec["🛠️ Executor<br/>test-first · draft pull request"]
+    reviews["🧐 Two reviewers<br/>independent, same exact commit"]
+    dispute{"Verdicts conflict,<br/>finding disputed or<br/>two failed repairs?"}
+    arbiter["⚖️ Arbiter<br/>rules by reproduction"]
+    stands{"A blocking<br/>finding stands?"}
+    repair["🛠️ Fresh executor<br/>repairs on the same branch"]
+    replace["🧐 Fresh reviewer<br/>same unchanged commit"]
+    done["🏁 Both APPROVE on the head commit<br/>every criterion evidenced"]
+    merge(["✅ Owner decides and merges"])
+
+    owner -->|task| lead
+    lead -.->|questions| scout
+    lead -.->|questions| researcher
+    lead -->|brief| exec
+    exec -->|head commit| reviews
+    reviews -->|both verdicts in| dispute
+    dispute -->|yes| arbiter
+    dispute -->|no| stands
+    arbiter --> stands
+    arbiter -.->|unresolved| owner
+    stands -->|yes| repair
+    repair -->|new commit, two fresh reviews| reviews
+    stands -->|"no, but a REQUEST_CHANGES was overturned"| replace
+    replace -->|its verdict replaces it| dispute
+    stands -->|no| done
+    done --> merge
+
+    classDef human fill:#8250df,stroke:#6639ba,color:#ffffff
+    classDef leader fill:#0969da,stroke:#0550ae,color:#ffffff
+    classDef support fill:#0e7490,stroke:#155e75,color:#ffffff
+    classDef build fill:#1a7f37,stroke:#116329,color:#ffffff
+    classDef review fill:#bc4c00,stroke:#953800,color:#ffffff
+    classDef judge fill:#cf222e,stroke:#a40e26,color:#ffffff
+    classDef gate fill:#fff8c5,stroke:#9a6700,color:#3b2300
+    classDef finish fill:#2da44e,stroke:#1a7f37,color:#ffffff
+
+    class owner,merge human
+    class lead leader
+    class scout,researcher support
+    class exec,repair build
+    class reviews,replace review
+    class arbiter judge
+    class dispute,stands gate
+    class done finish
 ```
-team.json                 team description: bundles, stamps, model rules, model sets
-models/                   model sets (codex-only, claude-only, codex+claude)
-lead/ROLE.md              one folder per role, each with ROLE.md ...
-lead/skills/*.md          ... and, where the role has them, its own skills
-executor/ reviewer/ scout/ researcher/ arbiter/
-shared/                   skills used by several roles (verification, debugging, reporting)
-scripts/check.py          validator and bundle printer (Python 3.10+, standard library only)
-tests/                    unit tests for the validator
-.github/workflows/        CI: runs the validator and the tests
+
+The executor opens a draft pull request; two reviewers review the same commit independently. When the verdicts conflict, or a finding is disputed (or after two failed repair rounds), the arbiter rules before any repair. An upheld finding leads to a repair by a fresh executor on the same branch and two fresh reviews of the new commit; if every finding behind a `REQUEST_CHANGES` is overturned, a replacement reviewer reviews the unchanged commit; a ruling that stays unresolved goes to the owner. Only the owner merges.
+
+## 📦 How a bundle is assembled
+
+`team.json` lists, per role, the ordered files of its **bundle**:
+
+```json
+"executor": {
+  "stamp": "ROLE: executor",
+  "instances": 1,
+  "bundle": [
+    "roles/executor/ROLE.md",
+    "roles/executor/skills/following-plan.md",
+    "roles/executor/skills/tests-first.md",
+    "roles/executor/skills/handling-review.md",
+    "shared/verification.md",
+    "shared/debugging.md",
+    "shared/reporting.md"
+  ]
+}
 ```
+
+A bundle always starts with the role's `roles/<role>/ROLE.md`, then the role's own skills, then the shared files it needs. The instruction file for a role is these files concatenated in that order. A launcher loads it into the agent's context before the agent does anything. `instances: 2` means two agents with the same instructions run independently.
+
+To see exactly what an agent receives:
+
+```sh
+python3 scripts/check.py --print executor > executor.md   # word count on stderr
+```
+
+Each file in the output is preceded by an HTML comment naming it, e.g. `<!-- file: roles/executor/ROLE.md -->`.
+
+**For launchers and other consumers.** Read the bundle paths from `team.json` rather than hard-coding them. Since version 2.0.0 the role folders live in `roles/<role>/`; in 1.x they were top-level folders, so every bundle path `<role>/...` became `roles/<role>/...`. The cross-references inside the role texts and the `--print` file markers use the new paths; `shared/`, `models/`, the `team.json` format (schema 1), the bundle order and the `--print` interface are unchanged.
+
+## 📜 The `ROLE.md` contract
 
 Every `ROLE.md` has exactly these headings, in this order: `# <Role name>`, `## Who you are`, `## What you receive`, `## What you must deliver`, `## Rules`, `## You must not`, `## Report`, and no other heading of any level. Inside a section, structure with bold lead-in labels or numbered paragraphs. Skills and shared files may use sub-headings.
 
-**The `ROLE.md` contract is about raw lines.** Agents read the raw text of their instruction file; nothing renders it. So the check works on raw lines and does not render or interpret Markdown. A *line* is what you get by splitting the file on `\n` only (after turning `\r\n` and `\r` into `\n`); a *blank* line is empty or ASCII spaces only. Each of these is an error, reported with file and line:
+**The contract is about raw lines.** Agents read the raw text of their instruction file; nothing renders it. So the check works on raw lines and does not render or interpret Markdown. A *line* is what you get by splitting the file on `\n` only (after turning `\r\n` and `\r` into `\n`); a *blank* line is empty or ASCII spaces only. Each of these is an error, reported with file and line:
 
 1. **Characters.** Any character other than `\n` and printable ASCII (0x20-0x7E): tab, other control characters, non-breaking space, byte-order mark, typographic quotes, dashes and arrows, any non-ASCII letter. The message names the code point.
 2. **Hash lines.** Any line whose first non-space character is `#`, or whose first non-space characters are a list marker (`-`, `*`, `+`, or digits followed by `.` or `)`) followed by spaces and then `#`, unless it is one of the seven required heading lines, exactly, at column 0, in order, each once. This applies everywhere, inside fenced code too.
@@ -57,90 +142,43 @@ The first line of every report is exactly:
 ROLE: <role>
 ```
 
-## How a bundle is assembled
-
-`team.json` lists, per role, the ordered files of its **bundle**:
-
-```json
-"executor": {
-  "stamp": "ROLE: executor",
-  "instances": 1,
-  "bundle": [
-    "executor/ROLE.md",
-    "executor/skills/following-plan.md",
-    "executor/skills/tests-first.md",
-    "executor/skills/handling-review.md",
-    "shared/verification.md",
-    "shared/debugging.md",
-    "shared/reporting.md"
-  ]
-}
-```
-
-A bundle always starts with the role's `ROLE.md`, then the role's own skills, then the shared files it needs. The instruction file for a role is these files concatenated in that order. A launcher loads it into the agent's context before the agent does anything. `instances: 2` means two agents with the same instructions run independently.
-
-To see exactly what an agent receives:
-
-```sh
-python3 scripts/check.py --print executor > executor.md   # word count on stderr
-```
-
-Each file in the output is preceded by an HTML comment naming it, e.g. `<!-- file: executor/ROLE.md -->`.
-
-## Validating
+## ✅ Validating
 
 ```sh
 python3 scripts/check.py                    # exits 0 when the playbook is valid
 python3 -m unittest discover -s tests       # tests for the validator
 ```
 
-`check.py` verifies that:
+`check.py` (Python 3.10+, standard library only) checks `team.json` and every model set against their format and `model_rules`; that every bundle path is canonical, exists inside `roles/<role>/` or `shared/` and passes through no symbolic link; that every role folder sits in `roles/` and is declared; that no Markdown file there or in `shared/` is unbundled; every `ROLE.md` against the contract above; and that no text uses the launcher-specific words in `FORBIDDEN`. It guards this repository against accidental damage; it is not a general Markdown linter, and reviewers still read the text. CI (`.github/workflows/check.yml`) runs both commands on every pull request and on pushes to `main`.
 
-- `team.json` matches the format (schema 1; each role has stamp `ROLE: <name>`, a positive `instances`, and a bundle that starts with its `ROLE.md`, then its own files, then `shared/` files);
-- every file it names exists, including the model sets;
-- every top-level folder that contains a `ROLE.md` (including dot-folders; only `.git` and `.github` are skipped) is a role in `team.json`;
-- every bundle path is in canonical form (no `./`, `..`, `//` or leading `/`), no bundle lists a file twice, no component of a bundle path is a symbolic link, and every bundled file resolves inside the repository;
-- no Markdown file (`.md` or `.markdown`, in any letter case) under a role folder or `shared/` is left out of every bundle (no orphans);
-- every `ROLE.md` keeps the raw-line contract above, including exactly the required heading lines, in order, and no other line starting with `#`;
-- no role or skill text contains the launcher-specific words the project bans (whole words, case-sensitive; see `FORBIDDEN` in `scripts/check.py`); texts say "isolated workspace", "the lead", "the owner" instead;
-- every non-lead `ROLE.md` contains the agent-ban line and, in its `## Report` section, the first-line instruction directly followed by the stamp line;
-- every model set covers every role with the right number of entries and satisfies `model_rules`, allowing only its declared exceptions; families are compared ignoring letter case and surrounding spaces;
-- every `models/*.json` file is listed in `model_sets`.
+## 🛠️ Changing or adding a role
 
-The forbidden-word scan and the UTF-8 check read every Markdown file under the role folders and `shared/` and every file named in any bundle, raw, so `--print` never emits text the check did not read. Files that are not valid UTF-8, and fields of the wrong JSON type (including a model set's optional `description`, which must be a string), are reported as errors with the file and field named.
+To change a role, edit its `roles/<role>/ROLE.md` or skills and run `python3 scripts/check.py`. Keep the required headings. Write for an agent that knows nothing else: imperative, specific, each non-obvious rule with a one-line reason.
 
-**Limits of the check.** The check guards this repository's own files against accidental damage; it is not a general Markdown linter and does not claim to classify every possible input. It checks that the ban, the instruction and the stamp are present, not what neighbouring sentences say about them; reviewers read the text. Skill and shared files have no structural checks.
-
-CI (`.github/workflows/check.yml`) runs both commands on every pull request and on pushes to `main`.
-
-## Changing or adding a role
-
-To change a role, edit its `ROLE.md` or skills and run `python3 scripts/check.py`. Keep the required headings. Write for an agent that knows nothing else: imperative, specific, each non-obvious rule with a one-line reason.
-
-To add a skill, create `<role>/skills/<name>.md` (or `shared/<name>.md`) and add it to the bundle of every role that needs it in `team.json`. An unbundled Markdown file fails the check as an orphan, and so does every Markdown file of a role folder that is not in `team.json`.
+To add a skill, create `roles/<role>/skills/<name>.md` (or `shared/<name>.md`) and add it to the bundle of every role that needs it in `team.json`. An unbundled Markdown file fails the check as an orphan, and so does every Markdown file of a role folder that is not in `team.json`.
 
 To add a role:
 
-1. Create `<role>/ROLE.md` with the seven required headings; the title is the role name (`# Release Manager` for `release-manager`).
+1. Create `roles/<role>/ROLE.md` with the seven required headings; the title is the role name (`# Release Manager` for `release-manager`).
 2. Unless it is the lead, include the common worker rules (copy them from an existing worker role), with the agent-ban line, and put the first-line instruction and the stamp line `ROLE: <role>` in the `## Report` section.
 3. Add the role to `team.json` with its stamp, instances and bundle (always including `shared/reporting.md` and `shared/verification.md`).
 4. Add a model for it to every file in `models/`, and add it to `model_rules` if it must run on a model different from another role.
 5. Update the approved-team assertions in `tests/` (the repository test pins the six roles).
 6. Run the validator and the tests.
 
-## Model sets
+## 🎛️ Model sets
 
-A model set picks a provider (`codex` or `claude`), a model family and an effort for each role; a launcher resolves the family to its newest release. A role with two instances has a list of two entries.
+A model set picks a provider (`codex` or `claude`), a model family and an effort for each role; a launcher resolves the family to its newest release. A role with two instances has a list of two entries. The table shows each entry's family ID and effort; the provider is in the set file.
 
 | Role | `codex-only` | `claude-only` | `codex+claude` |
 | --- | --- | --- | --- |
-| lead | codex astra high | claude opus high | codex astra high |
-| executor | codex sol medium | claude opus high | claude opus high |
-| reviewer #1 | codex astra high | claude fable high | claude fable high |
-| reviewer #2 | codex sol high | claude sonnet high | codex astra high |
-| scout | codex luna low | claude haiku medium | claude haiku medium |
-| researcher | codex sol high | claude opus high | codex sol high |
-| arbiter | codex astra xhigh | claude fable high | codex astra xhigh |
+| 🧭 lead | `astra` high | `opus` high | `astra` high |
+| 🛠️ executor | `sol` medium | `opus` high | `opus` high |
+| 🧐 reviewer 1 | `astra` high | `fable` high | `fable` high |
+| 🧐 reviewer 2 | `sol` high | `sonnet` high | `astra` high |
+| 🔎 scout | `luna` low | `haiku` medium | `haiku` medium |
+| 📚 researcher | `sol` high | `opus` high | `sol` high |
+| ⚖️ arbiter | `astra` xhigh | `fable` high | `astra` xhigh |
 
 `team.json` declares the rule that reviewers and the arbiter must run on a model (provider and family) different from the executor's. The lead receives the assignment as an input and also checks it against every model that actually authored commits on the pull request, across all rounds. A set may declare an exception to a rule, with a reason. `codex-only` declares one: reviewer #2 shares the executor's family (`sol`), because that provider set has too few distinct families; it runs at a different effort in its own isolated workspace.
 
@@ -164,10 +202,6 @@ A model set file looks like this (abridged):
 ```
 
 An exception that no longer matches a violation fails the check, so stale exceptions do not linger.
-
-## Credits
-
-Several methods here (clarifying before building, writing plans for an engineer with no context, test-first development, systematic debugging, verification before claiming completion, independent review) are adapted in spirit from the open-source [obra/superpowers](https://github.com/obra/superpowers) project, under the MIT license. The texts in this repository are written independently; none of its text is copied.
 
 ## License
 

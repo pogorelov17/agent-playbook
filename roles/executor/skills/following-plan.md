@@ -13,7 +13,7 @@ The plan records decisions already made with the owner. Following it faithfully 
 
 For each step, in order (unless the plan's dependencies allow reordering):
 
-1. Write the test the step names, run it, and confirm it fails for the expected reason (`executor/skills/tests-first.md`).
+1. Write the test the step names, run it, and confirm it fails for the expected reason (`roles/executor/skills/tests-first.md`).
 2. Make the change the step describes.
 3. Run the step's verification command. Compare its output with the expected output in the plan.
 4. Run the wider test suite if the change could affect other areas.

@@ -7,6 +7,7 @@ Run: python3 -m unittest discover -s tests
 
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -82,17 +83,17 @@ class Fixture:
                 "lead": {
                     "stamp": "ROLE: lead",
                     "instances": 1,
-                    "bundle": ["lead/ROLE.md", "lead/skills/a.md", "shared/reporting.md"],
+                    "bundle": ["roles/lead/ROLE.md", "roles/lead/skills/a.md", "shared/reporting.md"],
                 },
                 "executor": {
                     "stamp": "ROLE: executor",
                     "instances": 1,
-                    "bundle": ["executor/ROLE.md", "shared/reporting.md"],
+                    "bundle": ["roles/executor/ROLE.md", "shared/reporting.md"],
                 },
                 "reviewer": {
                     "stamp": "ROLE: reviewer",
                     "instances": 2,
-                    "bundle": ["reviewer/ROLE.md", "shared/reporting.md"],
+                    "bundle": ["roles/reviewer/ROLE.md", "shared/reporting.md"],
                 },
             },
             "model_rules": [{"roles": ["reviewer"], "must_differ_from": "executor"}],
@@ -107,10 +108,10 @@ class Fixture:
                 "reviewer": [model("claude", "fable"), model("codex", "astra")],
             },
         }
-        self.write("lead/ROLE.md", role_md("Lead", ban=False))
-        self.write("lead/skills/a.md", "# Skill A\n\n### Sub-headings are fine in skills\n\nText.\n")
-        self.write("executor/ROLE.md", role_md("Executor", "ROLE: executor"))
-        self.write("reviewer/ROLE.md", role_md("Reviewer", "ROLE: reviewer"))
+        self.write("roles/lead/ROLE.md", role_md("Lead", ban=False))
+        self.write("roles/lead/skills/a.md", "# Skill A\n\n### Sub-headings are fine in skills\n\nText.\n")
+        self.write("roles/executor/ROLE.md", role_md("Executor", "ROLE: executor"))
+        self.write("roles/reviewer/ROLE.md", role_md("Reviewer", "ROLE: reviewer"))
         self.write("shared/reporting.md", "# Reporting\n\nText.\n")
         self.save()
 
@@ -158,10 +159,10 @@ class ValidatorTest(unittest.TestCase):
         text = role_md("Executor", "ROLE: executor")
         self.assertIn(old, text)
         text = text.replace(old, new, 1)
-        self.fx.write("executor/ROLE.md", text)
+        self.fx.write("roles/executor/ROLE.md", text)
         return text
 
-    def assertLineError(self, text, line, fragment, errors=None, rel="executor/ROLE.md"):
+    def assertLineError(self, text, line, fragment, errors=None, rel="roles/executor/ROLE.md"):
         """Assert an error for the first raw line of `text` equal to `line`, naming file and line."""
         n = text.split("\n").index(line) + 1  # raw lines, as V2 defines them
         return self.assertError(f"{rel}:{n}: {fragment}", errors)
@@ -197,18 +198,18 @@ class ValidatorTest(unittest.TestCase):
 
     def test_bundle_must_start_with_role_md(self):
         self.fx.team["roles"]["executor"]["bundle"].reverse()
-        self.assertError("roles.executor.bundle must start with executor/ROLE.md")
+        self.assertError("roles.executor.bundle must start with roles/executor/ROLE.md")
 
     def test_own_files_before_shared(self):
-        self.fx.write("executor/skills/x.md", "# X\n")
-        self.fx.team["roles"]["executor"]["bundle"].append("executor/skills/x.md")
+        self.fx.write("roles/executor/skills/x.md", "# X\n")
+        self.fx.team["roles"]["executor"]["bundle"].append("roles/executor/skills/x.md")
         self.assertError(
-            "roles.executor.bundle: own file executor/skills/x.md must come before shared files"
+            "roles.executor.bundle: own file roles/executor/skills/x.md must come before shared files"
         )
 
     def test_foreign_role_file_in_bundle(self):
-        self.fx.team["roles"]["executor"]["bundle"].insert(1, "lead/skills/a.md")
-        self.assertError("roles.executor.bundle: lead/skills/a.md is neither under executor/ nor shared/")
+        self.fx.team["roles"]["executor"]["bundle"].insert(1, "roles/lead/skills/a.md")
+        self.assertError("roles.executor.bundle: roles/lead/skills/a.md is neither under roles/executor/ nor shared/")
 
     def test_duplicate_bundle_entry(self):
         self.fx.team["roles"]["executor"]["bundle"].append("shared/reporting.md")
@@ -259,8 +260,8 @@ class ValidatorTest(unittest.TestCase):
 
     def test_invalid_role_does_not_turn_its_files_into_orphans(self):
         self.fx.team["roles"]["executor"]["stamp"] = "ROLE: builder"
-        self.fx.team["roles"]["executor"]["bundle"].insert(1, "executor/skills/x.md")
-        self.fx.write("executor/skills/x.md", "# X\n")
+        self.fx.team["roles"]["executor"]["bundle"].insert(1, "roles/executor/skills/x.md")
+        self.fx.write("roles/executor/skills/x.md", "# X\n")
         self.executor_role("## Rules\n", "## Rule\n")
         errors = self.assertError("roles.executor.stamp must be 'ROLE: executor'")
         self.assertNoError("orphan", errors)
@@ -270,12 +271,12 @@ class ValidatorTest(unittest.TestCase):
     # --- encoding ---------------------------------------------------------
 
     def test_non_utf8_markdown(self):
-        self.fx.write("lead/skills/a.md", b"# Skill A\n\n\xff\xfe\n")
-        self.assertError("lead/skills/a.md: not valid UTF-8")
+        self.fx.write("roles/lead/skills/a.md", b"# Skill A\n\n\xff\xfe\n")
+        self.assertError("roles/lead/skills/a.md: not valid UTF-8")
 
     def test_non_utf8_role_md(self):
-        self.fx.write("executor/ROLE.md", role_md("Executor", "ROLE: executor").encode() + b"\xff\n")
-        self.assertError("executor/ROLE.md: not valid UTF-8")
+        self.fx.write("roles/executor/ROLE.md", role_md("Executor", "ROLE: executor").encode() + b"\xff\n")
+        self.assertError("roles/executor/ROLE.md: not valid UTF-8")
 
     def test_non_utf8_team_json(self):
         self.fx.save()
@@ -292,18 +293,18 @@ class ValidatorTest(unittest.TestCase):
 
     def test_missing_bundle_file(self):
         # Inserted where ordering is valid, so only the existence check can fire.
-        self.fx.team["roles"]["lead"]["bundle"].insert(2, "lead/skills/missing.md")
+        self.fx.team["roles"]["lead"]["bundle"].insert(2, "roles/lead/skills/missing.md")
         self.assertEqual(
             self.fx.errors(),
-            ["team.json: roles.lead.bundle names lead/skills/missing.md, which does not exist"],
+            ["team.json: roles.lead.bundle names roles/lead/skills/missing.md, which does not exist"],
         )
 
     def test_missing_role_md(self):
         self.fx.save()
-        (self.fx.root / "executor/ROLE.md").unlink()
+        (self.fx.root / "roles/executor/ROLE.md").unlink()
         errors = check.validate(self.fx.root)
         self.assertError(
-            "team.json: roles.executor.bundle names executor/ROLE.md, which does not exist", errors
+            "team.json: roles.executor.bundle names roles/executor/ROLE.md, which does not exist", errors
         )
 
     def test_missing_model_set_file(self):
@@ -311,53 +312,53 @@ class ValidatorTest(unittest.TestCase):
         self.assertError("model set 'two' names models/two.json, which does not exist")
 
     def test_orphan_file(self):
-        self.fx.write("lead/skills/orphan.md", "# Orphan\n")
-        self.assertError("lead/skills/orphan.md: orphan file, not listed in any bundle")
+        self.fx.write("roles/lead/skills/orphan.md", "# Orphan\n")
+        self.assertError("roles/lead/skills/orphan.md: orphan file, not listed in any bundle")
 
     def test_orphan_in_shared(self):
         self.fx.write("shared/unused.md", "# Unused\n")
         self.assertError("shared/unused.md: orphan file, not listed in any bundle")
 
     def test_orphan_with_other_markdown_extensions(self):
-        self.fx.write("lead/skills/upper.MD", "# Upper\n")
+        self.fx.write("roles/lead/skills/upper.MD", "# Upper\n")
         self.fx.write("shared/long.markdown", "# Long\n")
-        errors = self.assertError("lead/skills/upper.MD: orphan file")
+        errors = self.assertError("roles/lead/skills/upper.MD: orphan file")
         self.assertError("shared/long.markdown: orphan file", errors)
 
     def test_undeclared_role_folder(self):
-        self.fx.write("tester/ROLE.md", role_md("Tester", "ROLE: tester") + "\nRun it in a VM.\n")
-        self.fx.write("tester/skills/t.md", "# T\n")
-        errors = self.assertError("tester/ROLE.md: tester/ has a ROLE.md but is not a role in team.json")
-        self.assertError("tester/ROLE.md: orphan file", errors)
-        self.assertError("tester/skills/t.md: orphan file", errors)
+        self.fx.write("roles/tester/ROLE.md", role_md("Tester", "ROLE: tester") + "\nRun it in a VM.\n")
+        self.fx.write("roles/tester/skills/t.md", "# T\n")
+        errors = self.assertError("roles/tester/ROLE.md: roles/tester/ has a ROLE.md but is not a role in team.json")
+        self.assertError("roles/tester/ROLE.md: orphan file", errors)
+        self.assertError("roles/tester/skills/t.md: orphan file", errors)
         self.assertError("forbidden word 'VM'", errors)
 
     def test_role_removed_from_manifests_but_folder_left(self):
         del self.fx.team["roles"]["reviewer"]
         self.fx.team["model_rules"] = []
         del self.fx.model_set["roles"]["reviewer"]
-        errors = self.assertError("reviewer/ROLE.md: reviewer/ has a ROLE.md but is not a role in team.json")
-        self.assertError("reviewer/ROLE.md: orphan file", errors)
+        errors = self.assertError("roles/reviewer/ROLE.md: roles/reviewer/ has a ROLE.md but is not a role in team.json")
+        self.assertError("roles/reviewer/ROLE.md: orphan file", errors)
 
     def test_undeclared_role_headings_are_checked(self):
-        self.fx.write("tester/ROLE.md", "# Tester\n\n## Who you are\n")
-        self.assertError("tester/ROLE.md:3: headings must be exactly")
+        self.fx.write("roles/tester/ROLE.md", "# Tester\n\n## Who you are\n")
+        self.assertError("roles/tester/ROLE.md:3: headings must be exactly")
 
     # --- ROLE.md headings -------------------------------------------------
 
     def test_missing_heading(self):
         headings = [h for h in HEADINGS if h != "## You must not"]
-        self.fx.write("executor/ROLE.md", role_md("Executor", "ROLE: executor", headings=headings))
+        self.fx.write("roles/executor/ROLE.md", role_md("Executor", "ROLE: executor", headings=headings))
         self.assertError("headings must be exactly")
 
     def test_misordered_heading(self):
         headings = list(HEADINGS)
         headings[1], headings[2] = headings[2], headings[1]
-        self.fx.write("executor/ROLE.md", role_md("Executor", "ROLE: executor", headings=headings))
+        self.fx.write("roles/executor/ROLE.md", role_md("Executor", "ROLE: executor", headings=headings))
         self.assertError("headings must be exactly")
 
     def test_wrong_title_heading(self):
-        self.fx.write("executor/ROLE.md", role_md("Builder", "ROLE: executor"))
+        self.fx.write("roles/executor/ROLE.md", role_md("Builder", "ROLE: executor"))
         self.assertError("headings must be exactly")
 
     def test_heading_text_is_exact(self):
@@ -365,7 +366,7 @@ class ValidatorTest(unittest.TestCase):
         self.assertError("headings must be exactly")
 
     def test_extra_h2_heading(self):
-        self.fx.write("executor/ROLE.md", role_md("Executor", "ROLE: executor") + "\n## Extra\n\nText.\n")
+        self.fx.write("roles/executor/ROLE.md", role_md("Executor", "ROLE: executor") + "\n## Extra\n\nText.\n")
         self.assertError("headings must be exactly")
 
     def test_subheading_in_role_md_rejected(self):
@@ -434,13 +435,13 @@ class ValidatorTest(unittest.TestCase):
     # --- forbidden words --------------------------------------------------
 
     def test_forbidden_word_in_role(self):
-        self.fx.write("executor/ROLE.md", role_md("Executor", "ROLE: executor") + "\nRun it in a VM.\n")
-        self.assertError("executor/ROLE.md:")
+        self.fx.write("roles/executor/ROLE.md", role_md("Executor", "ROLE: executor") + "\nRun it in a VM.\n")
+        self.assertError("roles/executor/ROLE.md:")
         self.assertError("forbidden word 'VM'")
 
     def test_forbidden_word_in_skill(self):
-        self.fx.write("lead/skills/a.md", "# Skill A\n\nUse Boat to launch.\n")
-        self.assertError("lead/skills/a.md:3: forbidden word 'Boat'")
+        self.fx.write("roles/lead/skills/a.md", "# Skill A\n\nUse Boat to launch.\n")
+        self.assertError("roles/lead/skills/a.md:3: forbidden word 'Boat'")
 
     def test_forbidden_word_plural_and_t3(self):
         self.fx.write("shared/reporting.md", "# Reporting\n\nTwo VMs on T3.\n")
@@ -462,7 +463,7 @@ class ValidatorTest(unittest.TestCase):
     # --- non-lead rules: stamp --------------------------------------------
 
     def test_missing_stamp_line(self):
-        self.fx.write("executor/ROLE.md", role_md("Executor", stamp=None))
+        self.fx.write("roles/executor/ROLE.md", role_md("Executor", stamp=None))
         self.assertError("the Report section must contain a line consisting of exactly 'ROLE: executor'")
 
     def test_stamp_inside_prose_is_not_a_stamp_line(self):
@@ -471,7 +472,7 @@ class ValidatorTest(unittest.TestCase):
 
     def test_stamp_outside_report_section_rejected(self):
         text = role_md("Executor", stamp=None).replace("## You must not\n", "ROLE: executor\n\n## You must not\n")
-        self.fx.write("executor/ROLE.md", text)
+        self.fx.write("roles/executor/ROLE.md", text)
         self.assertError("the Report section must contain a line consisting of exactly 'ROLE: executor'")
 
     def test_stamp_without_first_line_instruction_rejected(self):
@@ -494,8 +495,8 @@ class ValidatorTest(unittest.TestCase):
                 self.assertError("missing the agent-ban sentence")
 
     def test_missing_agent_ban(self):
-        self.fx.write("reviewer/ROLE.md", role_md("Reviewer", "ROLE: reviewer", ban=False))
-        self.assertError("reviewer/ROLE.md:1: missing the agent-ban sentence")
+        self.fx.write("roles/reviewer/ROLE.md", role_md("Reviewer", "ROLE: reviewer", ban=False))
+        self.assertError("roles/reviewer/ROLE.md:1: missing the agent-ban sentence")
 
     def test_ban_with_conditional_suffix_rejected(self):
         for suffix in ("offers it, unless the lead allows it.", "offers it unless the task is urgent."):
@@ -659,18 +660,18 @@ class ValidatorTest(unittest.TestCase):
         text = role_md("Executor", stamp=None).replace(
             "## You must not\n", f"{STAMP_RULE}\n\nROLE: executor\n\n## You must not\n"
         )
-        self.fx.write("executor/ROLE.md", text)
+        self.fx.write("roles/executor/ROLE.md", text)
         errors = self.assertError(f"the Report section must contain the line {STAMP_RULE!r}")
         self.assertError("the Report section must contain a line consisting of exactly 'ROLE: executor'", errors)
 
     def test_strict_form_applies_to_lead_role_md(self):
         text = role_md("Lead", ban=False).replace("## Rules\n", "## Rules\n\n> Quoted\n")
-        self.fx.write("lead/ROLE.md", text)
-        self.assertLineError(text, "> Quoted", "a block-quoted line", rel="lead/ROLE.md")
+        self.fx.write("roles/lead/ROLE.md", text)
+        self.assertLineError(text, "> Quoted", "a block-quoted line", rel="roles/lead/ROLE.md")
 
     def test_strict_form_does_not_apply_to_skills_and_shared_files(self):
         body = "\n> Quoted\n\n<!-- comment -->\n\n\tTabbed\n\n    Indented\n\nTitle\n=====\n"
-        self.fx.write("lead/skills/a.md", "# Skill A\n" + body)
+        self.fx.write("roles/lead/skills/a.md", "# Skill A\n" + body)
         self.fx.write("shared/reporting.md", "# Reporting\n" + body)
         self.assertEqual(self.fx.errors(), [])
 
@@ -681,18 +682,18 @@ class ValidatorTest(unittest.TestCase):
     # --- V2: the contract is about raw lines --------------------------------
 
     def assertCharError(self, text, line_no, code, errors=None):
-        return self.assertError(f"executor/ROLE.md:{line_no}: character {code} is not allowed in a ROLE.md", errors)
+        return self.assertError(f"roles/executor/ROLE.md:{line_no}: character {code} is not allowed in a ROLE.md", errors)
 
     def line_no(self, text, fragment):
         """1-based number of the first raw line (split on '\\n' only) containing `fragment`."""
         return next(i for i, l in enumerate(text.split("\n"), 1) if fragment in l)
 
     def test_role_md_errors_carry_a_line_number(self):
-        self.fx.write("executor/ROLE.md", "# Executor\n\nText.\n")
-        errors = [e for e in self.fx.errors() if e.startswith("executor/ROLE.md")]
+        self.fx.write("roles/executor/ROLE.md", "# Executor\n\nText.\n")
+        errors = [e for e in self.fx.errors() if e.startswith("roles/executor/ROLE.md")]
         self.assertTrue(errors)
         for e in errors:
-            self.assertRegex(e, r"^executor/ROLE\.md:\d+: ")
+            self.assertRegex(e, r"^roles/executor/ROLE\.md:\d+: ")
 
     def test_non_ascii_and_control_characters_rejected(self):
         for ch, code in (("\x0c", "U+000C"), ("\x0b", "U+000B"), ("\x00", "U+0000"), ("\x7f", "U+007F"),
@@ -704,7 +705,7 @@ class ValidatorTest(unittest.TestCase):
 
     def test_byte_order_mark_rejected(self):
         text = "﻿" + role_md("Executor", "ROLE: executor")
-        self.fx.write("executor/ROLE.md", text)
+        self.fx.write("roles/executor/ROLE.md", text)
         self.assertCharError(text, 1, "U+FEFF")
 
     def test_stamp_with_form_feed_rejected(self):
@@ -853,13 +854,13 @@ class ValidatorTest(unittest.TestCase):
         for eol in ("\r\n", "\r"):
             with self.subTest(repr(eol)):
                 text = role_md("Executor", "ROLE: executor").replace("\n", eol)
-                self.fx.write("executor/ROLE.md", text.encode("ascii"))
+                self.fx.write("roles/executor/ROLE.md", text.encode("ascii"))
                 self.assertEqual(self.fx.errors(), [])
 
     def test_missing_final_newline_accepted(self):
         text = role_md("Executor", "ROLE: executor").rstrip("\n")
         self.assertTrue(text.endswith("ROLE: executor"))
-        self.fx.write("executor/ROLE.md", text)
+        self.fx.write("roles/executor/ROLE.md", text)
         self.assertEqual(self.fx.errors(), [])
 
     def test_column_zero_fenced_example_accepted(self):
@@ -869,7 +870,7 @@ class ValidatorTest(unittest.TestCase):
     # --- V3: bundled files and symbolic links --------------------------------
 
     def bundle_executor(self, rel):
-        self.fx.team["roles"]["executor"]["bundle"] = ["executor/ROLE.md", rel, "shared/reporting.md"]
+        self.fx.team["roles"]["executor"]["bundle"] = ["roles/executor/ROLE.md", rel, "shared/reporting.md"]
 
     def test_symlinked_directory_in_bundle_path(self):
         outside = tempfile.TemporaryDirectory()
@@ -878,56 +879,82 @@ class ValidatorTest(unittest.TestCase):
             with self.subTest(str(target)):
                 (target / "bad.md").parent.mkdir(parents=True, exist_ok=True)
                 (target / "bad.md").write_text("# Bad\n\nRun it in a VM.\n", encoding="utf-8")
-                link = self.fx.root / "executor/skills/linked"
+                link = self.fx.root / "roles/executor/skills/linked"
                 link.parent.mkdir(parents=True, exist_ok=True)
                 if link.is_symlink():
                     link.unlink()
                 link.symlink_to(target, target_is_directory=True)
-                self.bundle_executor("executor/skills/linked/bad.md")
-                errors = self.assertError(f"executor/skills/linked/bad.md {SYMLINK}")
-                self.assertError("executor/skills/linked/bad.md:3: forbidden word 'VM'", errors)
+                self.bundle_executor("roles/executor/skills/linked/bad.md")
+                errors = self.assertError(f"roles/executor/skills/linked/bad.md {SYMLINK}")
+                self.assertError("roles/executor/skills/linked/bad.md:3: forbidden word 'VM'", errors)
 
     def test_symlinked_file_in_bundle(self):
         self.fx.write("notes/target.md", "# Target\n\nUse T3.\n")
-        link = self.fx.root / "executor/skills/f.md"
+        link = self.fx.root / "roles/executor/skills/f.md"
         link.parent.mkdir(parents=True, exist_ok=True)
         link.symlink_to(self.fx.root / "notes/target.md")
-        self.bundle_executor("executor/skills/f.md")
-        errors = self.assertError(f"executor/skills/f.md {SYMLINK}")
-        self.assertError("executor/skills/f.md:3: forbidden word 'T3'", errors)
+        self.bundle_executor("roles/executor/skills/f.md")
+        errors = self.assertError(f"roles/executor/skills/f.md {SYMLINK}")
+        self.assertError("roles/executor/skills/f.md:3: forbidden word 'T3'", errors)
 
     def test_bundled_file_outside_discovery_is_checked_for_utf8(self):
         outside = tempfile.TemporaryDirectory()
         self.addCleanup(outside.cleanup)
         Path(outside.name, "bad.md").write_bytes(b"# Bad\n\xff\n")
-        (self.fx.root / "executor/skills").mkdir(parents=True, exist_ok=True)
-        (self.fx.root / "executor/skills/linked").symlink_to(outside.name, target_is_directory=True)
-        self.bundle_executor("executor/skills/linked/bad.md")
-        errors = self.assertError("executor/skills/linked/bad.md: not valid UTF-8")
+        (self.fx.root / "roles/executor/skills").mkdir(parents=True, exist_ok=True)
+        (self.fx.root / "roles/executor/skills/linked").symlink_to(outside.name, target_is_directory=True)
+        self.bundle_executor("roles/executor/skills/linked/bad.md")
+        errors = self.assertError("roles/executor/skills/linked/bad.md: not valid UTF-8")
         self.assertError(SYMLINK, errors)
 
     def test_symlinked_role_md(self):
         self.fx.write("notes/ROLE.md", role_md("Executor", "ROLE: executor"))
-        (self.fx.root / "executor/ROLE.md").unlink()
-        (self.fx.root / "executor/ROLE.md").symlink_to(self.fx.root / "notes/ROLE.md")
-        self.assertError(f"executor/ROLE.md {SYMLINK}")
+        (self.fx.root / "roles/executor/ROLE.md").unlink()
+        (self.fx.root / "roles/executor/ROLE.md").symlink_to(self.fx.root / "notes/ROLE.md")
+        self.assertError(f"roles/executor/ROLE.md {SYMLINK}")
 
     # --- E5: discovery, paths, model-set fields ----------------------------
 
     def test_dot_role_folder_discovered(self):
-        self.fx.write(".hidden/ROLE.md", role_md("Hidden", "ROLE: hidden"))
-        self.fx.write(".hidden/skills/h.md", "# H\n")
-        errors = self.assertError(".hidden/ROLE.md: .hidden/ has a ROLE.md but is not a role in team.json")
-        self.assertError(".hidden/skills/h.md: orphan file", errors)
+        self.fx.write("roles/.hidden/ROLE.md", role_md("Hidden", "ROLE: hidden"))
+        self.fx.write("roles/.hidden/skills/h.md", "# H\n")
+        errors = self.assertError("roles/.hidden/ROLE.md: roles/.hidden/ has a ROLE.md but is not a role in team.json")
+        self.assertError("roles/.hidden/skills/h.md: orphan file", errors)
 
     def test_git_and_github_folders_skipped(self):
         self.fx.write(".git/ROLE.md", "Run it in a VM.\n")
         self.fx.write(".github/ROLE.md", "Run it in a VM.\n")
         self.assertEqual(self.fx.errors(), [])
 
+    def test_role_folder_outside_roles_dir(self):
+        # A role folder left at the top level (the layout before roles/) is never used.
+        self.fx.write("executor/ROLE.md", role_md("Executor", "ROLE: executor"))
+        self.fx.write(".hidden/ROLE.md", role_md("Hidden", "ROLE: hidden"))
+        errors = self.assertError(
+            "executor/ROLE.md: executor/ has a ROLE.md outside roles/; role folders live in roles/<role>/"
+        )
+        self.assertError(".hidden/ROLE.md: .hidden/ has a ROLE.md outside roles/", errors)
+
+    def test_old_layout_bundle_path_rejected(self):
+        self.fx.write("executor/ROLE.md", role_md("Executor", "ROLE: executor"))
+        self.fx.team["roles"]["executor"]["bundle"][0] = "executor/ROLE.md"
+        errors = self.assertError("roles.executor.bundle must start with roles/executor/ROLE.md, got 'executor/ROLE.md'")
+        self.assertError("roles.executor.bundle: executor/ROLE.md is neither under roles/executor/ nor shared/", errors)
+
+    def test_own_files_must_be_inside_the_role_folder(self):
+        self.fx.write("roles/executor.md", "# X\n")
+        self.fx.team["roles"]["executor"]["bundle"].insert(1, "roles/executor.md")
+        self.assertError("roles.executor.bundle: roles/executor.md is neither under roles/executor/ nor shared/")
+
+    def test_missing_roles_folder(self):
+        import shutil
+        shutil.rmtree(self.fx.root / "roles")
+        errors = self.assertError("team.json: roles.lead.bundle names roles/lead/ROLE.md, which does not exist")
+        self.assertNoError("orphan", errors)
+
     def test_bundle_paths_must_be_canonical(self):
         for rel in ("./shared/reporting.md", "shared//reporting.md", "shared/./reporting.md",
-                    "/shared/reporting.md", "executor/../shared/reporting.md"):
+                    "/shared/reporting.md", "roles/executor/../shared/reporting.md"):
             with self.subTest(rel):
                 fx = Fixture()
                 self.addCleanup(fx.cleanup)
@@ -953,7 +980,7 @@ class ValidatorTest(unittest.TestCase):
         self.assertEqual(self.fx.errors(), [])
 
     def test_lead_needs_no_ban_or_stamp(self):
-        self.fx.write("lead/ROLE.md", role_md("Lead", stamp=None, ban=False))
+        self.fx.write("roles/lead/ROLE.md", role_md("Lead", stamp=None, ban=False))
         self.assertEqual(self.fx.errors(), [])
 
     # --- model sets -------------------------------------------------------
@@ -1053,8 +1080,8 @@ class CliTest(unittest.TestCase):
         self.assertEqual(
             markers,
             [
-                "<!-- file: lead/ROLE.md -->",
-                "<!-- file: lead/skills/a.md -->",
+                "<!-- file: roles/lead/ROLE.md -->",
+                "<!-- file: roles/lead/skills/a.md -->",
                 "<!-- file: shared/reporting.md -->",
             ],
         )
@@ -1066,6 +1093,11 @@ class CliTest(unittest.TestCase):
         result = self.run_cli("--print", "nobody")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("nobody", result.stderr)
+
+
+# A repository-relative path to a Markdown file, as instructions and the README
+# write it: at least one '/', no placeholder such as <role>, not part of a URL.
+PATH_REF = re.compile(r"(?<![\w/.:<>-])((?:[\w.-]+/)+[\w.-]+\.md)\b")
 
 
 class RepositoryTest(unittest.TestCase):
@@ -1108,6 +1140,34 @@ class RepositoryTest(unittest.TestCase):
         self.assertEqual(
             self.team["model_rules"], [{"roles": ["reviewer", "arbiter"], "must_differ_from": "executor"}]
         )
+
+    def test_role_folders_live_under_roles(self):
+        self.assertEqual(check.misplaced_role_folders(REPO), [])
+        self.assertEqual(check.role_folders(REPO), sorted(self.team["roles"]))
+        for name, spec in self.team["roles"].items():
+            with self.subTest(name):
+                self.assertEqual(spec["bundle"][0], f"roles/{name}/ROLE.md")
+
+    def test_paths_named_in_instructions_exist(self):
+        # Role and skill texts point to each other by path (`roles/lead/skills/briefing.md`,
+        # shared/verification.md); every such path must name a file in the repository,
+        # so a path from an older layout (lead/skills/briefing.md) fails here.
+        pattern = PATH_REF
+        bundled = sorted({rel for spec in self.team["roles"].values() for rel in spec["bundle"]})
+        found = 0
+        for rel in bundled:
+            text = (REPO / rel).read_text(encoding="utf-8")
+            for ref in pattern.findall(text):
+                found += 1
+                with self.subTest(file=rel, ref=ref):
+                    self.assertTrue((REPO / ref).is_file(), f"{rel} names {ref}, which does not exist")
+        self.assertGreater(found, 0)
+
+    def test_readme_names_only_existing_paths(self):
+        readme = (REPO / "README.md").read_text(encoding="utf-8")
+        for ref in PATH_REF.findall(readme):
+            with self.subTest(ref):
+                self.assertTrue((REPO / ref).is_file(), f"README.md names {ref}, which does not exist")
 
     def test_readme_documents_the_ban_sentence(self):
         readme = (REPO / "README.md").read_text(encoding="utf-8")
