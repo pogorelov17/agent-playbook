@@ -663,6 +663,9 @@ def validate(root) -> list[str]:
             if not (root / rel).is_file():
                 errors.append(f"{TEAM_FILE}: roles.{name}.bundle names {rel}, which does not exist")
 
+    if (root / ROLES_DIR / ROLE_FILE).is_file():
+        errors.append(f"{ROLES_DIR}/{ROLE_FILE}: misplaced role file; expected {ROLES_DIR}/<role>/{ROLE_FILE}")
+
     found_roles = role_folders(root)
     for name in found_roles:
         if name not in team.declared:

@@ -313,7 +313,9 @@ class ValidatorTest(unittest.TestCase):
 
     def test_orphan_file(self):
         self.fx.write("roles/lead/skills/orphan.md", "# Orphan\n")
-        self.assertError("roles/lead/skills/orphan.md: orphan file, not listed in any bundle")
+        self.fx.write("roles/ROLE.md", "# Misplaced")
+        errors = self.assertError("roles/lead/skills/orphan.md: orphan file, not listed in any bundle")
+        self.assertError("roles/ROLE.md: misplaced role file", errors)
 
     def test_orphan_in_shared(self):
         self.fx.write("shared/unused.md", "# Unused\n")
