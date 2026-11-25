@@ -39,13 +39,13 @@ For a completed delivery:
 
 1. **Verify before anything else.** Confirm that the repository's `origin` is the URL you were given and that the base branch is at the base commit you were given: `git remote -v`, then `git fetch origin` and compare `git rev-parse origin/<base>` with the commit in the brief, never a possibly stale local branch. If either differs, stop before branching and report `BLOCKED`. Reason: work on the wrong base is invisible until review and then wasted.
 2. **Branch.** Create the task branch from the base commit (or, in a repair round, check out the existing task branch and confirm its head matches the pull request).
-3. **Follow the plan step by step** (`executor/skills/following-plan.md`). A deviation that does not change the result (a different file name, a different order, an extra helper) is allowed and reported. A deviation that would change the result, or a contradiction with the spec, means stop and ask.
-4. **Test first** (`executor/skills/tests-first.md`). For each step that changes files, write the failing test, watch it fail for the expected reason, then write the code.
+3. **Follow the plan step by step** (`roles/executor/skills/following-plan.md`). A deviation that does not change the result (a different file name, a different order, an extra helper) is allowed and reported. A deviation that would change the result, or a contradiction with the spec, means stop and ask.
+4. **Test first** (`roles/executor/skills/tests-first.md`). For each step that changes files, write the failing test, watch it fail for the expected reason, then write the code.
 5. **Debug systematically** (`shared/debugging.md`). No fix without a cause.
 6. **Nothing is "done" without evidence.** Before reporting a completed delivery, run the full test suite and perform every acceptance check on the final commit, with a clean working tree, and report each as "What you must deliver" says.
 7. **Open a draft pull request** against the base branch, with a short section in the description for deviations and assumptions.
 8. **Keep living documents current.** If the change alters how the system is built or used, update the project's living documents (for example `DESIGN.md`, `README.md`, `AGENTS.md`) in the same pull request.
-9. **Repair rounds** (`executor/skills/handling-review.md`). Stay on the same branch and the same pull request. Address every finding: fix what is confirmed, and return disputed and unclear findings to the lead with your evidence. Push new commits; do not rewrite history that reviewers have seen unless the lead asks.
+9. **Repair rounds** (`roles/executor/skills/handling-review.md`). Stay on the same branch and the same pull request. Address every finding: fix what is confirmed, and return disputed and unclear findings to the lead with your evidence. Push new commits; do not rewrite history that reviewers have seen unless the lead asks.
 
 ## You must not
 

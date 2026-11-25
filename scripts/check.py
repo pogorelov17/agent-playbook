@@ -6,10 +6,12 @@ Usage:
     python3 scripts/check.py --print ROLE    # print ROLE's assembled bundle
     python3 scripts/check.py --root DIR ...  # operate on another tree (tests)
 
-The validator is generic: it knows the lead role and the shared folder by
-name, and nothing else about which roles a team has. Agents read the raw
+The validator is generic: it knows the lead role, the roles folder and the
+shared folder by name, and nothing else about which roles a team has. Each
+role lives in roles/<role>/ (its ROLE.md and, where it has them, its skills);
+files used by several roles live in shared/. Agents read the raw
 text of their instructions, so the contract for a ROLE.md is defined on raw
-lines (split on '\n' only) and never on rendered Markdown; see "Validation"
+lines (split on '\n' only) and never on rendered Markdown; see "The ROLE.md contract"
 in the README.
 
 Standard library only; Python 3.10+.
@@ -26,6 +28,7 @@ from pathlib import Path, PurePosixPath
 SCHEMA_VERSION = 1
 LEAD = "lead"
 SHARED = "shared"
+ROLES_DIR = "roles"
 TEAM_FILE = "team.json"
 MODELS_DIR = "models"
 ROLE_FILE = "ROLE.md"
@@ -60,7 +63,8 @@ PROVIDERS = {"codex", "claude"}
 EFFORTS = {"minimal", "low", "medium", "high", "xhigh", "max"}
 MODEL_KEYS = {"provider", "family", "effort"}
 ROLE_NAME = re.compile(r"^[a-z][a-z0-9-]*$")
-SKIPPED_DIRS = {".git", ".github"}
+# Top-level folders never searched for a misplaced ROLE.md.
+SKIPPED_DIRS = {".git", ".github", ROLES_DIR}
 
 # V2: a ROLE.md is judged on raw lines. All patterns are ASCII-only on purpose
 # ([0-9], literal spaces), so they mean exactly what the README says.
@@ -98,6 +102,11 @@ def is_int(value) -> bool:
 
 def is_name(value) -> bool:
     return isinstance(value, str) and bool(value.strip())
+
+
+def role_dir(name: str) -> str:
+    """The folder of a role, relative to the repository root."""
+    return f"{ROLES_DIR}/{name}"
 
 
 def safe_rel(rel) -> bool:
@@ -221,7 +230,8 @@ class Team:
         if not isinstance(bundle, list) or not bundle or not all(isinstance(b, str) for b in bundle):
             self._err(f"{where}.bundle must be a non-empty list of paths")
             return False
-        first = f"{name}/{ROLE_FILE}"
+        own = role_dir(name)
+        first = f"{own}/{ROLE_FILE}"
         if bundle[0] != first:
             self._err(f"{where}.bundle must start with {first}, got {bundle[0]!r}")
             ok = False
@@ -240,15 +250,15 @@ class Team:
                 )
                 ok = False
                 continue
-            top = PurePosixPath(rel).parts[0]
-            if top == SHARED:
+            parts = PurePosixPath(rel).parts
+            if parts[0] == SHARED:
                 in_shared = True
-            elif top == name:
+            elif parts[:2] == (ROLES_DIR, name) and len(parts) > 2:
                 if in_shared:
                     self._err(f"{where}.bundle: own file {rel} must come before shared files")
                     ok = False
             else:
-                self._err(f"{where}.bundle: {rel} is neither under {name}/ nor {SHARED}/")
+                self._err(f"{where}.bundle: {rel} is neither under {own}/ nor {SHARED}/")
                 ok = False
         return ok
 
@@ -615,8 +625,18 @@ def link_problem(root: Path, rel: str) -> str | None:
 
 
 def role_folders(root: Path) -> list[str]:
-    """Top-level directories that contain a ROLE.md, whatever team.json says,
-    including dot-folders; only .git and .github are skipped."""
+    """Folders under roles/ that contain a ROLE.md, whatever team.json says,
+    including dot-folders."""
+    base = root / ROLES_DIR
+    if not base.is_dir():
+        return []
+    return sorted(p.name for p in base.iterdir() if p.is_dir() and (p / ROLE_FILE).is_file())
+
+
+def misplaced_role_folders(root: Path) -> list[str]:
+    """Top-level directories, other than roles/, .git and .github, that
+    contain a ROLE.md: role folders left outside roles/ (for example from the
+    layout before roles/ existed), which no bundle may use."""
     return sorted(
         p.name for p in root.iterdir()
         if p.is_dir() and p.name not in SKIPPED_DIRS and (p / ROLE_FILE).is_file()
@@ -643,15 +663,24 @@ def validate(root) -> list[str]:
             if not (root / rel).is_file():
                 errors.append(f"{TEAM_FILE}: roles.{name}.bundle names {rel}, which does not exist")
 
+    if (root / ROLES_DIR / ROLE_FILE).is_file():
+        errors.append(f"{ROLES_DIR}/{ROLE_FILE}: misplaced role file; expected {ROLES_DIR}/<role>/{ROLE_FILE}")
+
     found_roles = role_folders(root)
     for name in found_roles:
         if name not in team.declared:
-            errors.append(f"{name}/{ROLE_FILE}: {name}/ has a {ROLE_FILE} but is not a role in {TEAM_FILE}")
+            where = role_dir(name)
+            errors.append(f"{where}/{ROLE_FILE}: {where}/ has a {ROLE_FILE} but is not a role in {TEAM_FILE}")
+    for name in misplaced_role_folders(root):
+        errors.append(
+            f"{name}/{ROLE_FILE}: {name}/ has a {ROLE_FILE} outside {ROLES_DIR}/; "
+            f"role folders live in {ROLES_DIR}/<role>/"
+        )
 
     # Every markdown file under a role folder (declared or found) or shared/.
     roles = sorted({n for n in team.declared if ROLE_NAME.match(n)} | set(found_roles))
     scanned: list[str] = []
-    for top in roles + [SHARED]:
+    for top in [role_dir(n) for n in roles] + [SHARED]:
         folder = root / top
         if folder.is_dir():
             scanned += sorted(p.relative_to(root).as_posix() for p in folder.rglob("*") if is_markdown(p))
@@ -668,7 +697,7 @@ def validate(root) -> list[str]:
             errors += check_forbidden(rel, text)
 
     for name in roles:
-        rel = f"{name}/{ROLE_FILE}"
+        rel = f"{role_dir(name)}/{ROLE_FILE}"
         if rel in texts:
             errors += check_role_md(name, rel, texts[rel])
 

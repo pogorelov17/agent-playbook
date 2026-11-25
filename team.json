@@ -1,17 +1,17 @@
 {
   "schema": 1,
   "name": "agent-playbook",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "roles": {
     "lead": {
       "stamp": "ROLE: lead",
       "instances": 1,
       "bundle": [
-        "lead/ROLE.md",
-        "lead/skills/clarifying.md",
-        "lead/skills/writing-spec.md",
-        "lead/skills/writing-plan.md",
-        "lead/skills/briefing.md",
+        "roles/lead/ROLE.md",
+        "roles/lead/skills/clarifying.md",
+        "roles/lead/skills/writing-spec.md",
+        "roles/lead/skills/writing-plan.md",
+        "roles/lead/skills/briefing.md",
         "shared/verification.md",
         "shared/reporting.md"
       ]
@@ -20,10 +20,10 @@
       "stamp": "ROLE: executor",
       "instances": 1,
       "bundle": [
-        "executor/ROLE.md",
-        "executor/skills/following-plan.md",
-        "executor/skills/tests-first.md",
-        "executor/skills/handling-review.md",
+        "roles/executor/ROLE.md",
+        "roles/executor/skills/following-plan.md",
+        "roles/executor/skills/tests-first.md",
+        "roles/executor/skills/handling-review.md",
         "shared/verification.md",
         "shared/debugging.md",
         "shared/reporting.md"
@@ -33,8 +33,8 @@
       "stamp": "ROLE: reviewer",
       "instances": 2,
       "bundle": [
-        "reviewer/ROLE.md",
-        "reviewer/skills/reviewing.md",
+        "roles/reviewer/ROLE.md",
+        "roles/reviewer/skills/reviewing.md",
         "shared/verification.md",
         "shared/reporting.md"
       ]
@@ -43,8 +43,8 @@
       "stamp": "ROLE: scout",
       "instances": 1,
       "bundle": [
-        "scout/ROLE.md",
-        "scout/skills/exploring.md",
+        "roles/scout/ROLE.md",
+        "roles/scout/skills/exploring.md",
         "shared/verification.md",
         "shared/debugging.md",
         "shared/reporting.md"
@@ -54,8 +54,8 @@
       "stamp": "ROLE: researcher",
       "instances": 1,
       "bundle": [
-        "researcher/ROLE.md",
-        "researcher/skills/researching.md",
+        "roles/researcher/ROLE.md",
+        "roles/researcher/skills/researching.md",
         "shared/verification.md",
         "shared/reporting.md"
       ]
@@ -64,7 +64,7 @@
       "stamp": "ROLE: arbiter",
       "instances": 1,
       "bundle": [
-        "arbiter/ROLE.md",
+        "roles/arbiter/ROLE.md",
         "shared/verification.md",
         "shared/debugging.md",
         "shared/reporting.md"
